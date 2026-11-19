@@ -52,6 +52,14 @@ From `Microsoft-Windows-Diagnostics-Performance/Operational` (admin-only log).
 
 On an HDD system drive, add ~60 s to each threshold and recommend an SSD.
 
+**Check `stale` first.** Windows sometimes stops writing boot events to this log while the log
+itself stays enabled (seen on a PC booting daily whose newest entry was a year old). Likely
+causes: a tweak or "debloat" tool that turned off Windows diagnostic tracing, or the Diagnostic
+Policy Service being disabled. When `stale` is true:
+- Do not report `lastBootSec` / `avgBootSec` as current. Say when the last measurement dates from.
+- Use `boot.firmwareSec` (non-admin) for the current picture, plus `maintenance.startup`.
+- It is not a fault in itself: mention it in "what was not checked", not as a 🟡.
+
 A slowdown that comes back on most boots with `avgDelaySec` > 10 s is worth naming in the
 report (e.g. "the Riot Vanguard service delays each boot by ~12 s").
 

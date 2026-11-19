@@ -234,7 +234,17 @@ if (-not $isAdmin) {
             }
         })
         $times = @($boots | ForEach-Object { $_.bootSec })
+        # The log sometimes stops recording boots (seen: last entry a year old on a PC that boots
+        # daily). Flag stale data instead of presenting it as current.
+        $newest = if ($boots.Count) { [datetime]$boots[0].time } else { $null }
+        $logInfo = Invoke-Safe 'bootperf-log' {
+            $li = Get-WinEvent -ListLog $log -ErrorAction Stop
+            [ordered]@{ enabled = $li.IsEnabled; records = $li.RecordCount; mode = [string]$li.LogMode; maxMB = [math]::Round($li.MaximumSizeInBytes / 1MB, 1); fileMB = [math]::Round($li.FileSize / 1MB, 1) }
+        }
         [ordered]@{
+            lastRecordedBoot = if ($newest) { ConvertTo-Iso $newest } else { $null }
+            stale        = if ($newest) { ($now - $newest).TotalDays -gt 30 } else { $null }
+            log          = $logInfo
             lastBootSec  = if ($times.Count) { $times[0] } else { $null }
             avgBootSec   = if ($times.Count) { [math]::Round(($times | Measure-Object -Average).Average, 1) } else { $null }
             recentBoots  = $boots
