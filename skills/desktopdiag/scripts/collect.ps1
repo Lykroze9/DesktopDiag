@@ -344,6 +344,8 @@ $snap.stability = Invoke-Safe 'stability' {
         if ($r) { [ordered]@{ index = [math]::Round($r.SystemStabilityIndex, 2); at = ConvertTo-Iso $r.TimeGenerated } }
     }
     $dumps = Invoke-Safe 'minidumps' {
+        # No Minidump folder = no dumps written yet (normal), not an error.
+        if (-not (Test-Path -LiteralPath "$env:SystemRoot\Minidump")) { return ,@() }
         @(Get-ChildItem -LiteralPath "$env:SystemRoot\Minidump" -Filter *.dmp -ErrorAction Stop | Sort-Object LastWriteTime -Descending | Select-Object -First 15 | ForEach-Object {
             [ordered]@{ file = $_.Name; date = ConvertTo-Iso $_.LastWriteTime; kb = [math]::Round($_.Length / 1KB) }
         })
@@ -487,7 +489,11 @@ $snap.security = Invoke-Safe 'security' {
         $searcher = $session.CreateUpdateSearcher()
         $total = $searcher.GetTotalHistoryCount()
         $hist = @()
-        if ($total -gt 0) { $hist = @($searcher.QueryHistory(0, [math]::Min(15, $total))) }
+        if ($total -gt 0) {
+            # Index the COM collection: enumerating it fails on some machines (empty/fresh history).
+            $coll = $searcher.QueryHistory(0, [math]::Min(15, $total))
+            $hist = @(for ($i = 0; $i -lt $coll.Count; $i++) { $coll.Item($i) })
+        }
         $ok = @($hist | Where-Object { $_.ResultCode -eq 2 -and $_.Operation -eq 1 })
         $failed = @($hist | Where-Object { $_.ResultCode -in 4, 5 })
         [ordered]@{

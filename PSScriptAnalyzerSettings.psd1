@@ -7,6 +7,8 @@
         'PSAvoidUsingEmptyCatchBlock',
         'PSUseSingularNouns',
         'PSUseDeclaredVarsMoreThanAssignments',
-        'PSUseBOMForUnicodeEncodedFile'
+        'PSUseBOMForUnicodeEncodedFile',
+        # False positive: parameters used inside scriptblocks passed to Invoke-Safe.
+        'PSReviewUnusedParameter'
     )
 }
