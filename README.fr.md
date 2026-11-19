@@ -1,5 +1,9 @@
 # DesktopDiag
 
+### Ton PC est lent, a des petits bugs, plante... ou tu veux juste faire un petit checking ?
+
+DesktopDiag passe ton Windows au crible et t'explique simplement ce qui ne va pas, et quoi faire.
+
 > **👋 Un projet perso.** DesktopDiag est né comme un outil fait sur mesure pour mon propre PC,
 > après des semaines à traquer des freezes GPU et des écrans bleus, puis il est devenu un skill que
 > j'ai eu envie de partager. Ce n'est pas un produit commercial, et il est loin d'être terminé.

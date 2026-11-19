@@ -1,5 +1,9 @@
 # DesktopDiag
 
+### Is your PC slow, glitchy, crashing... or do you just want a quick checkup?
+
+DesktopDiag scans your Windows PC and tells you in plain words what's wrong, and what to do about it.
+
 > **👋 A personal side project.** DesktopDiag started as a custom tool I built for my own PC, after
 > chasing GPU freezes and blue screens, and grew into a skill I wanted to share. It is not a
 > commercial product and it is far from finished.
