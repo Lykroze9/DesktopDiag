@@ -1,0 +1,13 @@
+{
+  "name": "desktopdiag",
+  "owner": {
+    "name": "Lykroze"
+  },
+  "plugins": [
+    {
+      "name": "desktopdiag",
+      "source": "./",
+      "description": "Read-only Windows PC health check: crashes/BSOD, GPU resets, SSD wear, hardware errors, security. French and English reports."
+    }
+  ]
+}

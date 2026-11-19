@@ -1,0 +1,122 @@
+---
+name: desktopdiag
+description: Read-only Windows PC health check and troubleshooting. Use when the user asks to check, diagnose or audit their Windows PC, or reports crashes, blue screens (BSOD), freezes, black screens, display driver resets, random reboots, slowness, overheating, disk or SSD problems, or asks "is my PC OK". Also in French - "check du PC", "checking du PC", "diagnostic PC", "mon PC plante", "écran bleu", "écran noir", "freeze", "le PC redémarre tout seul", "PC lent", "santé du SSD". Collects data with PowerShell (no admin needed), compares with previous checks, and writes a scored report in the user's language (French or English).
+---
+
+# DesktopDiag
+
+Read-only health check for Windows 10/11 PCs. Works with the built-in Windows PowerShell 5.1.
+
+**Golden rule: collect and explain, never change.** The collection scripts only read. Any fix is
+a proposal the user must approve, action by action (see `references/remediation.md`).
+
+**Language:** answer in the user's language. French and English report templates are in
+`references/report.md`. If unclear, use the language of the user's last message.
+
+## Workflow
+
+### 1. Pick the mode from the request
+
+| Mode | When | What to do |
+|---|---|---|
+| **Quick** | "check my PC", "is everything OK" | Collect, report all areas briefly. |
+| **Symptom** | The user describes a problem | Collect, then focus the report on areas linked to the symptom (table below). Ask one clarifying question only if the symptom is too vague to act on. |
+| **Deep** | Crashes with unclear cause, disk worries, or the user asks for a full check | Quick/Symptom first, then propose the admin step (step 4). |
+
+| Symptom (EN / FR) | Look first at | Reference |
+|---|---|---|
+| Blue screen / écran bleu | `stability.bugchecks`, `unexpectedShutdowns`, `minidumps` | `bsod.md` |
+| Black screen, frozen image, driver reset / écran noir, image figée | `gpuEvents`, `hardware.gpus`, startup OC tools, `unexpectedShutdowns` code 0x0 | `gpu.md` |
+| Reboots on its own / redémarre tout seul | `unexpectedShutdowns`, `hardwareErrors`, `bugchecks` | `bsod.md`, `events.md` |
+| Slow / lent | `load`, `storage.volumes`, `maintenance.startup`, `diskEvents` | `storage.md` |
+| Disk, SSD, USB drive / disque, SSD, clé USB | `storage`, `diskEvents` | `storage.md` |
+| Game crashes / jeux qui plantent | `appCrashes`, `gpuEvents`, `stability` | `gpu.md` |
+| Security worries / sécurité | `security` | `report.md` |
+
+### 2. Collect
+
+Run from the skill directory (replace `<skill-dir>` with this skill's folder):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "<skill-dir>\scripts\collect.ps1"
+```
+
+- Takes about 30-60 s. Saves a snapshot to `%LOCALAPPDATA%\DesktopDiag\history\<timestamp>.json` and prints its path. Read that JSON file.
+- Options: `-Days 7` (general error window), `-CrashDays 30` (crash/GPU/disk window), `-Full` (adds pending winget upgrades and a driver inventory, slower), `-Anonymize -OutFile <path>` (share mode), `-NoSave` (do not add to history).
+- `meta.needsAdmin` lists what could not be read without admin (normal). `meta.collectErrors` lists real failures: mention them only if they hide something important.
+
+### 3. Compare with the previous check
+
+If the history holds an earlier snapshot:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "<skill-dir>\scripts\compare.ps1"
+```
+
+It prints JSON: free space deltas, crashes/GPU/disk/hardware events **new since the previous
+snapshot**, driver/BIOS/build changes, startup entries added or removed, devices newly failing or
+fixed. Use it for the "Since last check" section. Skip silently if `comparable` is false.
+
+### 4. Optional admin deep scan
+
+Propose it when it would change the conclusion: SSD health needed, crash dumps to analyse,
+file system doubts. Explain that a Windows admin prompt will appear. Then:
+
+```powershell
+Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','<skill-dir>\scripts\collect-admin.ps1','-OutFile','<scratch>\dd-admin.json'
+```
+
+Add `'-Dumps'` to analyse recent minidumps with WinDbg's `cdb` (if installed; downloads Microsoft
+symbols the first time) and `'-Sfc'` for a read-only system file check (several minutes). It
+returns reliability counters, SMART via smartctl if installed, and a read-only `Repair-Volume -Scan`.
+If smartctl or WinDbg is missing, the JSON includes the `winget install` command: offer it, do not
+install without a yes.
+
+### 5. Analyse
+
+Load only the references you need:
+
+- `references/events.md` - meaning of every event group, what is benign.
+- `references/bsod.md` - stop codes, crash patterns, culprit drivers.
+- `references/gpu.md` - TDR, black screens, triage order.
+- `references/storage.md` - free space, SMART/NVMe thresholds, disk errors.
+- `references/report.md` - scoring rubric and FR/EN templates. **Always load before writing the report.**
+- `references/remediation.md` - risk levels and safe execution. Load before proposing any fix.
+- `references/followup.md` - follow-up cadence, scheduling, prompt templates. Load before scheduling.
+
+Cross-check before concluding:
+- Map disk errors to the right physical disk (USB vs system SSD).
+- Count crashes from the System log only (the collector already does).
+- A single old event is not a trend; look at `first`, `last` and `count`.
+- Distinguish facts from hypotheses in the report.
+
+### 6. Report
+
+Follow `references/report.md`: score, table of areas, "since last check", what matters,
+3-5 recommendations (each saying whether you can do it after their OK or they must do it),
+what was not checked, and the proposed next check (step 7).
+
+### 7. Propose the next check (every time)
+
+End every report by proposing a follow-up check, sized to what was found: a one-time check in
+2-4 days after a fix or while a problem is active, weekly while recent red items settle, monthly
+for yellow-only or all-green PCs. Ask before scheduling (one question with the date/frequency).
+On a yes, schedule it with the local scheduled-task tool if available, with a self-contained
+prompt carrying this check's key numbers and known causes. Rules, time-zone handling, duplicate
+handling and FR/EN prompt templates: `references/followup.md`. **Load it before scheduling.**
+
+If this run is itself a scheduled follow-up, re-evaluate the cadence at the end (switch weekly to
+monthly when nothing new appears, or shorten it when a new red item shows up) and update the
+existing task instead of creating a new one.
+
+### 8. Fixes (only on request)
+
+Follow `references/remediation.md`. One action at a time, exact command shown first, explicit yes
+required, verify afterwards. Never delete user data, clear logs, disable security, or edit the
+registry/BIOS on your own initiative. After a fix, step 7 applies: propose a check in 3-4 days.
+
+## Privacy
+
+Everything stays on the PC. Nothing is uploaded, except Microsoft symbol downloads when the user
+accepts dump analysis. Snapshots in the history folder contain machine details: use `-Anonymize`
+before sharing anything outside.

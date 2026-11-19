@@ -1,0 +1,6 @@
+# Local DesktopDiag snapshots should never be committed
+*.json.bak
+history/
+*.dmp
+Thumbs.db
+.DS_Store
