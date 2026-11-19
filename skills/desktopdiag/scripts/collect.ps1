@@ -484,22 +484,34 @@ $snap.security = Invoke-Safe 'security' {
     $fw = @(Invoke-Safe 'firewall' {
         Get-NetFirewallProfile | ForEach-Object { [ordered]@{ profile = $_.Name; enabled = [bool]$_.Enabled } }
     })
+    # Windows Update history. Primary source: WindowsUpdateClient events in the System log
+    # (19 = installed, 20 = failed), locale-independent. Microsoft Store app updates are ignored.
+    # Fallback: the Update COM history, entry by entry (it throws on some fresh machines).
     $wu = Invoke-Safe 'windowsupdate' {
-        $session = New-Object -ComObject Microsoft.Update.Session
-        $searcher = $session.CreateUpdateSearcher()
-        $total = $searcher.GetTotalHistoryCount()
-        $hist = @()
-        if ($total -gt 0) {
-            # Index the COM collection: enumerating it fails on some machines (empty/fresh history).
-            $coll = $searcher.QueryHistory(0, [math]::Min(15, $total))
-            $hist = @(for ($i = 0; $i -lt $coll.Count; $i++) { $coll.Item($i) })
+        $storeGuid = '{855e8a7c-ecb4-4ca3-b045-1dfa50104289}'
+        $evData = { param($e) $d = @{}; ([xml]$e.ToXml()).Event.EventData.Data | ForEach-Object { $d[$_.Name] = $_.'#text' }; $d }
+        $wuEv = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'Microsoft-Windows-WindowsUpdateClient'; Id = 19, 20 } -MaxEvents 400 -ErrorAction SilentlyContinue |
+            ForEach-Object { $d = & $evData $_; if ($d.serviceGuid -ne $storeGuid) { [pscustomobject]@{ id = $_.Id; time = $_.TimeCreated; title = $d.updateTitle; code = $d.errorCode } } })
+        $ok = @($wuEv | Where-Object { $_.id -eq 19 })
+        $failed = @($wuEv | Where-Object { $_.id -eq 20 -and $_.time -ge $now.AddDays(-30) })
+        $source = 'eventlog'
+        if (-not $wuEv.Count) {
+            $source = 'com'
+            $session = New-Object -ComObject Microsoft.Update.Session
+            $searcher = $session.CreateUpdateSearcher()
+            $total = $searcher.GetTotalHistoryCount()
+            if ($total -gt 0) {
+                $coll = $searcher.QueryHistory(0, [math]::Min(15, $total))
+                $hist = @(for ($i = 0; $i -lt $coll.Count; $i++) { try { $h = $coll.Item($i); [pscustomobject]@{ op = $h.Operation; rc = $h.ResultCode; time = $h.Date; title = $h.Title; code = ('0x{0:X8}' -f $h.HResult) } } catch { } })
+                $ok = @($hist | Where-Object { $_.rc -eq 2 -and $_.op -eq 1 })
+                $failed = @($hist | Where-Object { @(4, 5) -contains $_.rc })
+            }
         }
-        $ok = @($hist | Where-Object { $_.ResultCode -eq 2 -and $_.Operation -eq 1 })
-        $failed = @($hist | Where-Object { $_.ResultCode -in 4, 5 })
         [ordered]@{
-            lastSuccess = if ($ok.Count) { ConvertTo-Iso (($ok | Sort-Object Date -Descending)[0].Date) } else { $null }
-            recentFailures = @($failed | Select-Object -First 5 | ForEach-Object {
-                [ordered]@{ date = ConvertTo-Iso $_.Date; title = $_.Title; hresult = ('0x{0:X8}' -f $_.HResult) }
+            source = $source
+            lastSuccess = if ($ok.Count) { ConvertTo-Iso (($ok | Sort-Object time -Descending)[0].time) } else { $null }
+            recentFailures = @($failed | Sort-Object time -Descending | Select-Object -First 5 | ForEach-Object {
+                [ordered]@{ date = ConvertTo-Iso $_.time; title = $_.title; hresult = $_.code }
             })
         }
     }
