@@ -34,7 +34,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
-$DDVersion = '0.1.0'
+$DDVersion = '0.2.0'
 $now = Get-Date
 $script:collectErrors = New-Object System.Collections.Generic.List[string]
 
@@ -201,6 +201,44 @@ if (-not $isAdmin) {
                 }
             })
             [ordered]@{ available = $true; results = $results }
+        }
+    }
+
+    # ------------------------------------------------------------ boot performance
+    # Diagnostics-Performance/Operational is admin-only. Event 100 = one boot, times in ms.
+    # Events 101-110 = something slowed a boot down (app, driver, service...).
+    $snap.bootPerformance = Invoke-Safe 'bootperf' {
+        $log = 'Microsoft-Windows-Diagnostics-Performance/Operational'
+        $boots = @(Get-WinEvent -FilterHashtable @{ LogName = $log; Id = 100 } -MaxEvents 15 -ErrorAction SilentlyContinue | ForEach-Object {
+            $d = @{}
+            ([xml]$_.ToXml()).Event.EventData.Data | ForEach-Object { $d[$_.Name] = $_.'#text' }
+            [ordered]@{
+                time        = ConvertTo-Iso $_.TimeCreated
+                bootSec     = [math]::Round([double]$d.BootTime / 1000, 1)
+                mainPathSec = [math]::Round([double]$d.MainPathBootTime / 1000, 1)
+                postBootSec = [math]::Round([double]$d.BootPostBootTime / 1000, 1)
+                degraded    = ($d.IsDegradation -eq 'true')
+            }
+        })
+        $slow = @(Get-WinEvent -FilterHashtable @{ LogName = $log; Id = 101..110; StartTime = $now.AddDays(-60) } -ErrorAction SilentlyContinue | ForEach-Object {
+            $d = @{}
+            ([xml]$_.ToXml()).Event.EventData.Data | ForEach-Object { $d[$_.Name] = $_.'#text' }
+            $name = @($d.FriendlyName, $d.Name, $d.FileName) | Where-Object { $_ } | Select-Object -First 1
+            [pscustomobject]@{ key = ('{0} {1}' -f $_.Id, $name).Trim(); time = $_.TimeCreated; ms = [double]$d.DegradationTime }
+        } | Group-Object key | Sort-Object Count -Descending | Select-Object -First 10 | ForEach-Object {
+            [ordered]@{
+                key      = $_.Name
+                count    = $_.Count
+                last     = ConvertTo-Iso (($_.Group | Sort-Object time -Descending)[0].time)
+                avgDelaySec = [math]::Round((($_.Group | Measure-Object ms -Average).Average) / 1000, 1)
+            }
+        })
+        $times = @($boots | ForEach-Object { $_.bootSec })
+        [ordered]@{
+            lastBootSec  = if ($times.Count) { $times[0] } else { $null }
+            avgBootSec   = if ($times.Count) { [math]::Round(($times | Measure-Object -Average).Average, 1) } else { $null }
+            recentBoots  = $boots
+            slowdowns    = $slow
         }
     }
 

@@ -3,11 +3,12 @@
   "owner": {
     "name": "Lykroze"
   },
+  "description": "DesktopDiag: a read-only Windows PC health check skill for Claude Code, with French and English reports.",
   "plugins": [
     {
       "name": "desktopdiag",
       "source": "./",
-      "description": "Read-only Windows PC health check: crashes/BSOD, GPU resets, SSD wear, hardware errors, security. French and English reports."
+      "description": "Read-only Windows PC health check: crashes/BSOD, GPU resets, SSD wear, hardware errors, boot time, CPU throttling, security. French and English reports."
     }
   ]
 }

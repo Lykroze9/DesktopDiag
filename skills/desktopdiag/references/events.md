@@ -93,3 +93,11 @@ audio, networking) or when they match the user's symptom.
 Application Error 1000 key = `app.exe [faulting module]`. Repeated crashes with the same module
 point to that module (for example an overlay DLL, a GPU driver DLL such as `nvwgf2umx.dll`, or
 `ntdll.dll` which is generic). Application Hang 1002 = the app stopped responding.
+
+## Boot and throttling events
+
+- `Microsoft-Windows-Kernel-Boot` 27 (boot type), 30 (firmware boot metrics): informational, read by the `boot` section. Not errors.
+- `Microsoft-Windows-Kernel-Processor-Power` 37 (warning): CPU speed limited by firmware, usually heat or power limit. 55 is informational (processor capabilities at boot), ignore it.
+- Diagnostics-Performance 100-110: admin-only boot performance log, read by `bootPerformance`.
+
+Interpretation and thresholds: `performance.md`.

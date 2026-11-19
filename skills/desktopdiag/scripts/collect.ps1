@@ -23,6 +23,10 @@
     Also run slower checks (winget pending upgrades, signed driver inventory).
 .PARAMETER Stdout
     Print the JSON to stdout instead of a short summary.
+.PARAMETER Summary
+    Print a compact JSON digest to stdout (key figures, event groups without timestamps,
+    no long lists) plus the path of the full snapshot. Much cheaper to read for an agent;
+    the full snapshot is still written.
 
 .EXAMPLE
     powershell -NoProfile -ExecutionPolicy Bypass -File collect.ps1
@@ -35,12 +39,13 @@ param(
     [switch]$NoSave,
     [switch]$Anonymize,
     [switch]$Full,
-    [switch]$Stdout
+    [switch]$Stdout,
+    [switch]$Summary
 )
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
-$DDVersion = '0.1.0'
+$DDVersion = '0.2.0'
 $now = Get-Date
 $script:collectErrors = New-Object System.Collections.Generic.List[string]
 
@@ -231,6 +236,34 @@ $snap.load = Invoke-Safe 'load' {
     }
 }
 
+# ---------------------------------------------------------------- boot
+# Full boot duration (Diagnostics-Performance log) needs admin: see collect-admin.ps1.
+# Without admin, Kernel-Boot 30 gives the firmware + boot manager time of each boot (ms).
+$snap.boot = Invoke-Safe 'boot' {
+    $kb30 = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'Microsoft-Windows-Kernel-Boot'; Id = 30 } -MaxEvents 15 -ErrorAction SilentlyContinue)
+    $kb27 = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'Microsoft-Windows-Kernel-Boot'; Id = 27 } -MaxEvents 15 -ErrorAction SilentlyContinue)
+    $typeNames = @{ 0 = 'cold'; 1 = 'fastStartup'; 2 = 'resumeHibernate' }
+    $samples = @($kb30 | ForEach-Object {
+        $e = $_
+        $ms = Get-PropValue $e 1
+        $t27 = $kb27 | Where-Object { [math]::Abs(($_.TimeCreated - $e.TimeCreated).TotalSeconds) -lt 30 } | Select-Object -First 1
+        $bt = if ($t27) { Get-PropValue $t27 0 } else { $null }
+        [ordered]@{
+            time        = ConvertTo-Iso $e.TimeCreated
+            firmwareSec = if ($ms) { [math]::Round([double]$ms / 1000, 1) } else { $null }
+            bootType    = if ($null -ne $bt -and $typeNames.ContainsKey([int]$bt)) { $typeNames[[int]$bt] } else { $bt }
+        }
+    })
+    $fw = @($samples | Where-Object { $_.firmwareSec } | ForEach-Object { $_.firmwareSec })
+    $hiberboot = Invoke-Safe 'fastStartup' { (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power' -ErrorAction Stop).HiberbootEnabled }
+    [ordered]@{
+        lastFirmwareSec    = if ($fw.Count) { $fw[0] } else { $null }
+        avgFirmwareSec     = if ($fw.Count) { [math]::Round(($fw | Measure-Object -Average).Average, 1) } else { $null }
+        fastStartupEnabled = if ($null -ne $hiberboot) { [int]$hiberboot -eq 1 } else { $null }
+        recentBoots        = $samples
+    }
+}
+
 # ---------------------------------------------------------------- storage
 $snap.storage = Invoke-Safe 'storage' {
     $vols = @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3 OR DriveType=2' | Where-Object { $_.Size } | ForEach-Object {
@@ -389,6 +422,31 @@ $snap.appCrashes = Invoke-Safe 'appCrashes' {
     }
 }
 
+# ---------------------------------------------------------------- thermal / throttling
+$snap.thermal = Invoke-Safe 'thermal' {
+    # Kernel-Processor-Power 37: "speed of processor X is being limited by system firmware"
+    # (usually heat or power limits). Warning level, so it is already in $sysEvents.
+    $ev = @($sysEvents | Where-Object { $_.ProviderName -eq 'Microsoft-Windows-Kernel-Processor-Power' -and $_.Id -eq 37 })
+    $perf = Invoke-Safe 'cpuperf' { Get-CimInstance Win32_PerfFormattedData_Counters_ProcessorInformation -Filter "Name='_Total'" -ErrorAction Stop }
+    $zones = @(Invoke-Safe 'thermalzones' {
+        Get-CimInstance Win32_PerfFormattedData_Counters_ThermalZoneInformation -ErrorAction Stop | ForEach-Object {
+            [ordered]@{
+                zone            = $_.Name
+                temperatureC    = if ($_.Temperature) { [int]$_.Temperature - 273 } else { $null }
+                passiveLimitPct = $_.PercentPassiveLimit
+                throttleReasons = $_.ThrottleReasons
+            }
+        }
+    })
+    [ordered]@{
+        cpuThrottleEvents   = @(New-EventGroup $ev { 'Kernel-Processor-Power/37' } 20)
+        cpuPerfLimitPct     = if ($perf) { $perf.PercentPerformanceLimit } else { $null }
+        cpuPctOfMaxFreq     = if ($perf) { $perf.PercentofMaximumFrequency } else { $null }
+        cpuFrequencyMHz     = if ($perf) { $perf.ProcessorFrequency } else { $null }
+        thermalZones        = $zones
+    }
+}
+
 # ---------------------------------------------------------------- devices
 $snap.problemDevices = @(Invoke-Safe 'problemDevices' {
     @(Get-CimInstance Win32_PnPEntity -Filter 'ConfigManagerErrorCode <> 0' | ForEach-Object {
@@ -541,7 +599,70 @@ if ($OutFile) {
     $written += (Resolve-Path -LiteralPath $OutFile).Path
 }
 
-if ($Stdout -or $written.Count -eq 0) {
+function Get-GroupDigest {
+    param($Groups, [int]$Max = 10)
+    @($Groups | Where-Object { $_ } | Select-Object -First $Max | ForEach-Object {
+        [ordered]@{ key = $_.key; count = $_.count; first = $_.first; last = $_.last }
+    })
+}
+
+if ($Summary) {
+    # Invariant culture so numbers in digest strings use a dot (106.4, not 106,4).
+    [Threading.Thread]::CurrentThread.CurrentCulture = [Globalization.CultureInfo]::InvariantCulture
+    $s = $snap
+    $sec = $s.security
+    $digest = [ordered]@{
+        fullSnapshot = if ($written.Count) { $written[0] } else { $null }
+        meta         = [ordered]@{ version = $DDVersion; timestamp = $s.meta.timestamp; utcOffset = $s.meta.utcOffset; uiCulture = $s.meta.uiCulture; windowDays = $Days; crashDays = $CrashDays; needsAdmin = $s.meta.needsAdmin; collectErrors = $s.meta.collectErrors }
+        system       = $s.system
+        hardware     = if ($s.hardware) { [ordered]@{
+            model = ('{0} {1}' -f $s.hardware.manufacturer, $s.hardware.model).Trim(); board = $s.hardware.board
+            bios = ('{0} ({1})' -f $s.hardware.biosVersion, $s.hardware.biosDate); cpu = $s.hardware.cpu; ramGB = $s.hardware.ramTotalGB
+            ramModules = @($s.hardware.ramModules).Count; ramRunningMHz = @($s.hardware.ramModules | ForEach-Object { $_.runningMHz } | Select-Object -Unique)
+            gpus = @($s.hardware.gpus | ForEach-Object { [ordered]@{ name = $_.name; driver = $(if ($_.nvidiaVersion) { $_.nvidiaVersion } else { $_.driverVersion }); driverDate = $_.driverDate; status = $_.status } })
+            isLaptop = $s.hardware.isLaptop } } else { $null }
+        load         = if ($s.load) { [ordered]@{ cpuPct = $s.load.cpuPct; ramUsedPct = $s.load.ramUsedPct; commitUsedPct = $s.load.commitUsedPct
+            topCpu = @($s.load.topCpu | Select-Object -First 3 | ForEach-Object { '{0} {1}%' -f $_.name, $_.cpuPct })
+            topMemory = @($s.load.topMemory | Select-Object -First 3 | ForEach-Object { '{0} {1}MB' -f $_.name, $_.memMB }) } } else { $null }
+        boot         = if ($s.boot) { [ordered]@{ lastFirmwareSec = $s.boot.lastFirmwareSec; avgFirmwareSec = $s.boot.avgFirmwareSec; fastStartupEnabled = $s.boot.fastStartupEnabled
+            bootTypes = @($s.boot.recentBoots | Group-Object { $_.bootType } | ForEach-Object { '{0} x{1}' -f $_.Name, $_.Count }) } } else { $null }
+        thermal      = if ($s.thermal) { [ordered]@{ cpuThrottleEvents = @(Get-GroupDigest $s.thermal.cpuThrottleEvents); cpuPerfLimitPct = $s.thermal.cpuPerfLimitPct; cpuPctOfMaxFreq = $s.thermal.cpuPctOfMaxFreq; thermalZones = $s.thermal.thermalZones } } else { $null }
+        storage      = if ($s.storage) { [ordered]@{
+            volumes = @($s.storage.volumes | ForEach-Object { '{0} {1} {2}/{3}GB free ({4}%)' -f $_.drive, $_.type, $_.freeGB, $_.sizeGB, $_.freePct })
+            disks = @($s.storage.physicalDisks | ForEach-Object { $r = $_.reliability; [ordered]@{ number = $_.number; name = $_.name; bus = $_.bus; media = $_.media; health = $_.health
+                tempC = $(if ($r) { $r.temperatureC } else { $null }); wearPct = $(if ($r) { $r.wearPct } else { $null }); readUncorrected = $(if ($r) { $r.readUncorrected } else { $null }) } }) } } else { $null }
+        stability    = if ($s.stability) { [ordered]@{
+            unexpectedShutdowns = @($s.stability.unexpectedShutdowns).Count
+            lastShutdowns = @($s.stability.unexpectedShutdowns | Select-Object -First 5 | ForEach-Object { '{0} {1}' -f $_.time, $_.bugcheckCode })
+            bugchecks = @($s.stability.bugchecks | Select-Object -First 5 | ForEach-Object { '{0} {1}' -f $_.time, $_.bugcheck })
+            dirtyShutdowns = $s.stability.dirtyShutdownCount; boots = $s.stability.bootCount
+            reliabilityIndex = $s.stability.reliabilityIndex; minidumps = @($s.stability.minidumps).Count; minidumpsReadable = $s.stability.minidumpsReadable } } else { $null }
+        gpuEvents       = @(Get-GroupDigest $s.gpuEvents)
+        diskEvents      = @(Get-GroupDigest $s.diskEvents)
+        hardwareErrors  = @(Get-GroupDigest $s.hardwareErrors)
+        tpmEvents       = @(Get-GroupDigest $s.tpmEvents 5)
+        serviceFailures = @(Get-GroupDigest $s.serviceFailures 8)
+        topSystemErrors = @(Get-GroupDigest $s.topSystemErrors 8)
+        appCrashes      = if ($s.appCrashes) { [ordered]@{ crashes = @($s.appCrashes.crashes | Select-Object -First 5 | ForEach-Object { '{0} x{1} (last {2})' -f $_.key, $_.count, $_.last }); hangs = @($s.appCrashes.hangs | Select-Object -First 5 | ForEach-Object { '{0} x{1}' -f $_.key, $_.count }) } } else { $null }
+        problemDevices  = @($s.problemDevices | ForEach-Object { '{0} (code {1}, present {2})' -f $_.name, $_.errorCode, $_.present })
+        security        = if ($sec) { [ordered]@{
+            defender = $sec.defender; antivirus = @($sec.antivirusProducts | ForEach-Object { '{0} enabled={1} upToDate={2}' -f $_.name, $_.enabled, $_.upToDate })
+            firewallOff = @($sec.firewall | Where-Object { -not $_.enabled } | ForEach-Object { $_.profile })
+            wuLastSuccess = $(if ($sec.windowsUpdate) { $sec.windowsUpdate.lastSuccess } else { $null }); wuRecentFailures = $(if ($sec.windowsUpdate) { @($sec.windowsUpdate.recentFailures).Count } else { $null })
+            rebootPending = $sec.rebootPending; uac = $sec.uacEnabled; secureBoot = $sec.secureBoot } } else { $null }
+        maintenance     = if ($s.maintenance) { [ordered]@{ startupCount = $s.maintenance.startupCount; startup = @($s.maintenance.startup | ForEach-Object { $_.name }); userTempGB = $s.maintenance.userTempGB; windowsTempGB = $s.maintenance.windowsTempGB; downloadsGB = $s.maintenance.downloadsGB } } else { $null }
+        network         = @($s.network | ForEach-Object { '{0}: {1} {2}' -f $_.name, $_.status, $_.linkSpeed })
+        battery         = $s.battery
+    }
+    if ($s.extra) { $digest.extra = [ordered]@{ wingetUpgrades = $(if ($s.extra.wingetUpgrades) { $s.extra.wingetUpgrades.count } else { $null }); drivers = @($s.extra.drivers).Count } }
+    $out = $digest | ConvertTo-Json -Depth 6 -Compress
+    if ($Anonymize) {
+        foreach ($f in @($env:USERPROFILE, $env:USERNAME, $env:COMPUTERNAME)) {
+            if ($f) { $out = [regex]::Replace($out, [regex]::Escape(($f -replace '\\', '\\')), '<redacted>', 'IgnoreCase') }
+        }
+    }
+    $out
+} elseif ($Stdout -or $written.Count -eq 0) {
     $publicJson
 } else {
     'DesktopDiag {0} - snapshot written ({1}s, {2} collect errors, {3} items need admin):' -f $DDVersion, $snap.meta.durationSec, $snap.meta.collectErrors.Count, $snap.meta.needsAdmin.Count

@@ -14,6 +14,8 @@ severity and explain why. Each rating needs one short reason with the actual num
 | **Hardware errors** | WHEA 18, many (>10) corrected WHEA errors, problem device code 10/43 on a key device | A few corrected WHEA, TPM errors, other problem devices | None |
 | **Security** | No active antivirus, real-time off, a firewall profile off | Signatures > 3 days old, last successful update > 30 days, recent update failures, UAC off | OK |
 | **Performance now** | RAM > 90% or commit > 95% | RAM > 80%, commit > 85%, one process > 50% CPU | OK |
+| **Boot time** | Admin full boot > 120 s (SSD system drive) | Firmware time > 30 s, or admin full boot 60-120 s, or a recurring boot slowdown > 10 s | OK, or no data |
+| **Heat / throttling** | CPU throttling events (Kernel-Processor-Power 37) in the last 7 days on a desktop or on AC power, together with crashes or the user's symptom; thermal zone > 95 °C | A few throttling events in 30 days; `cpuPerfLimitPct` < 100 at idle; thermal zone > 85 °C | None |
 | **Maintenance** | (rarely red) | Reboot pending, uptime > 14 days, > 15 startup entries, temp folders > 5 GB | OK |
 
 Score = 100 - 8 per 🟡 - 18 per 🔴, minimum 0.
@@ -54,6 +56,8 @@ The score is a summary for humans. Never let it hide a red item: list every 🔴
 | Erreurs matérielles | | |
 | Sécurité | | |
 | Performances (maintenant) | | |
+| Démarrage | | |
+| Chauffe | | |
 | Entretien | | |
 
 ### Depuis le dernier check (<date>)
@@ -88,6 +92,8 @@ The score is a summary for humans. Never let it hide a red item: list every 🔴
 | Hardware errors | | |
 | Security | | |
 | Performance (now) | | |
+| Boot time | | |
+| Heat | | |
 | Maintenance | | |
 
 ### Since last check (<date>)

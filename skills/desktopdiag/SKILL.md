@@ -28,7 +28,9 @@ a proposal the user must approve, action by action (see `references/remediation.
 | Blue screen / écran bleu | `stability.bugchecks`, `unexpectedShutdowns`, `minidumps` | `bsod.md` |
 | Black screen, frozen image, driver reset / écran noir, image figée | `gpuEvents`, `hardware.gpus`, startup OC tools, `unexpectedShutdowns` code 0x0 | `gpu.md` |
 | Reboots on its own / redémarre tout seul | `unexpectedShutdowns`, `hardwareErrors`, `bugchecks` | `bsod.md`, `events.md` |
-| Slow / lent | `load`, `storage.volumes`, `maintenance.startup`, `diskEvents` | `storage.md` |
+| Slow / lent | `load`, `storage.volumes`, `maintenance.startup`, `diskEvents`, `thermal` | `storage.md`, `performance.md` |
+| Slow to start / long à démarrer | `boot`, `maintenance.startup`, admin `bootPerformance` | `performance.md` |
+| Overheating, fans loud / chauffe, ventilos à fond | `thermal`, disk temperatures, `load` | `performance.md` |
 | Disk, SSD, USB drive / disque, SSD, clé USB | `storage`, `diskEvents` | `storage.md` |
 | Game crashes / jeux qui plantent | `appCrashes`, `gpuEvents`, `stability` | `gpu.md` |
 | Security worries / sécurité | `security` | `report.md` |
@@ -38,11 +40,12 @@ a proposal the user must approve, action by action (see `references/remediation.
 Run from the skill directory (replace `<skill-dir>` with this skill's folder):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "<skill-dir>\scripts\collect.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "<skill-dir>\scripts\collect.ps1" -Summary
 ```
 
-- Takes about 30-60 s. Saves a snapshot to `%LOCALAPPDATA%\DesktopDiag\history\<timestamp>.json` and prints its path. Read that JSON file.
-- Options: `-Days 7` (general error window), `-CrashDays 30` (crash/GPU/disk window), `-Full` (adds pending winget upgrades and a driver inventory, slower), `-Anonymize -OutFile <path>` (share mode), `-NoSave` (do not add to history).
+- Takes about 30-60 s. Saves the full snapshot to `%LOCALAPPDATA%\DesktopDiag\history\<timestamp>.json` and prints a **compact JSON digest** (about 10x smaller): key figures, event groups with count/first/last, no long lists. **Work from the digest.**
+- Open the full snapshot (path in `fullSnapshot`) only when you need detail the digest leaves out: every timestamp of an event group, event message samples, startup commands, full process lists, RAM modules, monitors, recent boots one by one. Read only the section you need.
+- Options: `-Days 7` (general error window), `-CrashDays 30` (crash/GPU/disk window), `-Full` (adds pending winget upgrades and a driver inventory, slower), `-Anonymize -OutFile <path>` (share mode), `-NoSave` (do not add to history), `-Stdout` (print the full JSON instead).
 - `meta.needsAdmin` lists what could not be read without admin (normal). `meta.collectErrors` lists real failures: mention them only if they hide something important.
 
 ### 3. Compare with the previous check
@@ -53,14 +56,14 @@ If the history holds an earlier snapshot:
 powershell -NoProfile -ExecutionPolicy Bypass -File "<skill-dir>\scripts\compare.ps1"
 ```
 
-It prints JSON: free space deltas, crashes/GPU/disk/hardware events **new since the previous
-snapshot**, driver/BIOS/build changes, startup entries added or removed, devices newly failing or
+It prints JSON: free space deltas, crashes/GPU/disk/hardware/CPU-throttling events **new since
+the previous snapshot**, firmware boot time vs before, driver/BIOS/build changes, startup entries added or removed, devices newly failing or
 fixed. Use it for the "Since last check" section. Skip silently if `comparable` is false.
 
 ### 4. Optional admin deep scan
 
 Propose it when it would change the conclusion: SSD health needed, crash dumps to analyse,
-file system doubts. Explain that a Windows admin prompt will appear. Then:
+file system doubts, slow boot (it reads the full boot duration and what slowed each boot down). Explain that a Windows admin prompt will appear. Then:
 
 ```powershell
 Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','<skill-dir>\scripts\collect-admin.ps1','-OutFile','<scratch>\dd-admin.json'
@@ -68,7 +71,8 @@ Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-Executio
 
 Add `'-Dumps'` to analyse recent minidumps with WinDbg's `cdb` (if installed; downloads Microsoft
 symbols the first time) and `'-Sfc'` for a read-only system file check (several minutes). It
-returns reliability counters, SMART via smartctl if installed, and a read-only `Repair-Volume -Scan`.
+returns reliability counters, boot performance (total boot time, boot slowdowns), SMART via
+smartctl if installed, and a read-only `Repair-Volume -Scan`.
 If smartctl or WinDbg is missing, the JSON includes the `winget install` command: offer it, do not
 install without a yes.
 
@@ -80,6 +84,7 @@ Load only the references you need:
 - `references/bsod.md` - stop codes, crash patterns, culprit drivers.
 - `references/gpu.md` - TDR, black screens, triage order.
 - `references/storage.md` - free space, SMART/NVMe thresholds, disk errors.
+- `references/performance.md` - boot time, CPU throttling, temperatures.
 - `references/report.md` - scoring rubric and FR/EN templates. **Always load before writing the report.**
 - `references/remediation.md` - risk levels and safe execution. Load before proposing any fix.
 - `references/followup.md` - follow-up cadence, scheduling, prompt templates. Load before scheduling.

@@ -29,6 +29,8 @@ infos, les explique simplement, donne une note à ton PC et te dit quoi faire. R
 | Matériel | Erreurs matérielles WHEA (CPU, RAM, PCIe), erreurs TPM, périphériques en erreur (code 10/43...) |
 | Sécurité | Antivirus, pare-feu, dernière mise à jour Windows réussie et échecs récents, redémarrage en attente, UAC, Secure Boot |
 | Performances | Vrai % CPU (mesuré, pas cumulé), RAM et mémoire engagée, processus les plus gourmands |
+| Démarrage | Durée du BIOS à chaque démarrage, démarrage rapide ; avec l'étape admin : durée totale du démarrage et ce qui l'a ralenti (appli, pilote, service) |
+| Chauffe | Bridage du processeur par le BIOS (chaleur ou limite de puissance), limitation en direct, zones thermiques si le PC les expose |
 | Entretien | Programmes au démarrage, dossiers temporaires, durée depuis le dernier redémarrage |
 | Historique | Chaque check est sauvegardé en local et comparé au précédent : nouveaux plantages, espace perdu, mises à jour de pilote/BIOS, nouveaux programmes au démarrage |
 | Suivi | Après chaque rapport, Claude propose le prochain check adapté à ce qu'il a trouvé (dans 2 à 4 jours après une correction, chaque semaine tant qu'un problème se stabilise, sinon chaque mois) et le programme avec ton accord via les tâches planifiées locales de l'appli Claude |
@@ -77,6 +79,9 @@ Tu peux aussi lancer la collecte toi-même :
 powershell -NoProfile -ExecutionPolicy Bypass -File skills\desktopdiag\scripts\collect.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File skills\desktopdiag\scripts\compare.ps1
 ```
+
+Ajoute `-Summary` à `collect.ps1` pour un résumé compact (environ 10 fois plus petit que le relevé
+complet). Claude l'utilise par défaut : chaque check consomme beaucoup moins de tokens.
 
 Les relevés sont stockés dans `%LOCALAPPDATA%\DesktopDiag\history`.
 

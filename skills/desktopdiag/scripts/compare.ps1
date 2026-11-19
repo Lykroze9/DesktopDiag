@@ -87,6 +87,17 @@ $out.newGpuEvents      = @(Compare-Groups $cur.gpuEvents)
 $out.newDiskEvents     = @(Compare-Groups $cur.diskEvents)
 $out.newHardwareErrors = @(Compare-Groups $cur.hardwareErrors)
 $out.newTpmEvents      = @(Compare-Groups $cur.tpmEvents)
+$out.newCpuThrottleEvents = @(Compare-Groups $cur.thermal.cpuThrottleEvents)
+
+# Boot (firmware + boot manager time; snapshots older than 0.2.0 have no boot section)
+if ($cur.boot) {
+    $out.boot = [ordered]@{
+        lastFirmwareSec     = $cur.boot.lastFirmwareSec
+        avgFirmwareSec      = $cur.boot.avgFirmwareSec
+        previousAvgFirmwareSec = if ($prev.boot) { $prev.boot.avgFirmwareSec } else { $null }
+        fastStartupChanged  = ($prev.boot -and $prev.boot.fastStartupEnabled -ne $cur.boot.fastStartupEnabled)
+    }
+}
 
 # Disks (reliability counters, only if both have them)
 $out.disks = @($cur.storage.physicalDisks | ForEach-Object {
