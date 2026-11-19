@@ -1,5 +1,13 @@
 # DesktopDiag
 
+> **👋 Un projet perso.** DesktopDiag est né comme un outil fait sur mesure pour mon propre PC,
+> après des semaines à traquer des freezes GPU et des écrans bleus, puis il est devenu un skill que
+> j'ai eu envie de partager. Ce n'est pas un produit commercial, et il est loin d'être terminé.
+>
+> **N'hésite pas à laisser ton avis !** Tu l'as essayé ? Un bug, un diagnostic à côté de la plaque,
+> un contrôle qui manque, ou juste une idée ? [Ouvre une issue](https://github.com/Lykroze9/DesktopDiag/issues),
+> en français ou en anglais. Chaque retour aide à améliorer le skill.
+
 **Diagnostic de santé Windows en lecture seule pour Claude Code.** Demande « fais un check du PC »
 ou décris ton problème (« écran noir en jeu », « le PC redémarre tout seul ») : Claude collecte les
 infos, les explique simplement, donne une note à ton PC et te dit quoi faire. Rapports en

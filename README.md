@@ -1,5 +1,13 @@
 # DesktopDiag
 
+> **👋 A personal side project.** DesktopDiag started as a custom tool I built for my own PC, after
+> chasing GPU freezes and blue screens, and grew into a skill I wanted to share. It is not a
+> commercial product and it is far from finished.
+>
+> **Your feedback is very welcome!** Tried it? Found a bug, a wrong diagnosis, a missing check, or
+> just have an idea? Please [open an issue](https://github.com/Lykroze9/DesktopDiag/issues), in
+> English or French. Every comment helps make the skill better.
+
 **Read-only Windows PC health check for Claude Code.** Ask "check my PC" or describe a problem
 ("my screen goes black in games", "random reboots") and Claude collects the data, explains it in
 plain language, scores your PC and tells you what to do next. Reports in **English or French**.
