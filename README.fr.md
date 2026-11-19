@@ -9,8 +9,8 @@ DesktopDiag passe ton Windows au crible et t'explique simplement ce qui ne va pa
 > j'ai eu envie de partager. Ce n'est pas un produit commercial, et il est loin d'être terminé.
 >
 > **N'hésite pas à laisser ton avis !** Tu l'as essayé ? Un bug, un diagnostic à côté de la plaque,
-> un contrôle qui manque, ou juste une idée ? [Ouvre une issue](https://github.com/Lykroze9/DesktopDiag/issues),
-> en français ou en anglais. Chaque retour aide à améliorer le skill.
+> un contrôle qui manque, ou juste une idée ? [Ouvre une issue](https://github.com/Lykroze9/DesktopDiag/issues)
+> ou lance une [discussion](https://github.com/Lykroze9/DesktopDiag/discussions), en français ou en anglais. Chaque retour aide à améliorer le skill.
 
 **Diagnostic de santé Windows en lecture seule pour Claude Code.** Demande « fais un check du PC »
 ou décris ton problème (« écran noir en jeu », « le PC redémarre tout seul ») : Claude collecte les
@@ -26,12 +26,14 @@ infos, les explique simplement, donne une note à ton PC et te dit quoi faire. R
 | Stabilité | Écrans bleus (code d'arrêt + paramètres), arrêts inattendus, fichiers de vidage, indice de fiabilité Windows |
 | Carte graphique | Réinitialisations du pilote (TDR), erreurs NVIDIA/AMD/Intel, version et âge du pilote, outils d'overclocking au démarrage |
 | Stockage | Espace libre, santé des disques, usure/température/erreurs SSD (SMART via smartctl), erreurs disque rattachées au bon disque (USB ou SSD système) |
-| Matériel | Erreurs matérielles WHEA (CPU, RAM, PCIe), erreurs TPM, périphériques en erreur (code 10/43...) |
+| Matériel | Erreurs matérielles WHEA (CPU, RAM, PCIe), résultat du test mémoire Windows, erreurs TPM, périphériques en erreur (code 10/43...) |
 | Sécurité | Antivirus, pare-feu, dernière mise à jour Windows réussie et échecs récents, redémarrage en attente, UAC, Secure Boot |
 | Performances | Vrai % CPU (mesuré, pas cumulé), RAM et mémoire engagée, processus les plus gourmands |
 | Démarrage | Durée du BIOS à chaque démarrage, démarrage rapide ; avec l'étape admin : durée totale du démarrage et ce qui l'a ralenti (appli, pilote, service) |
 | Chauffe | Bridage du processeur par le BIOS (chaleur ou limite de puissance), limitation en direct, zones thermiques si le PC les expose |
-| Entretien | Programmes au démarrage, dossiers temporaires, durée depuis le dernier redémarrage |
+| Réseau | Signal Wi-Fi, ping de la box, temps de réponse DNS, coupures Wi-Fi et Ethernet |
+| Batterie | Portables : santé (capacité actuelle par rapport à neuve) et cycles de charge |
+| Entretien | Programmes au démarrage, dossiers temporaires, durée depuis le dernier redémarrage, taille de la mémoire virtuelle et du fichier d'hibernation |
 | Historique | Chaque check est sauvegardé en local et comparé au précédent : nouveaux plantages, espace perdu, mises à jour de pilote/BIOS, nouveaux programmes au démarrage |
 | Suivi | Après chaque rapport, Claude propose le prochain check adapté à ce qu'il a trouvé (dans 2 à 4 jours après une correction, chaque semaine tant qu'un problème se stabilise, sinon chaque mois) et le programme avec ton accord via les tâches planifiées locales de l'appli Claude |
 
@@ -84,6 +86,21 @@ Ajoute `-Summary` à `collect.ps1` pour un résumé compact (environ 10 fois plu
 complet). Claude l'utilise par défaut : chaque check consomme beaucoup moins de tokens.
 
 Les relevés sont stockés dans `%LOCALAPPDATA%\DesktopDiag\history`.
+
+## Note
+
+La note et le niveau de chaque domaine viennent de `skills/desktopdiag/rules/rules.json`, appliqué
+par `scripts/score.ps1` : le même PC a toujours la même note, et Claude ajoute les explications.
+Les seuils sont décrits dans [rules/README.md](skills/desktopdiag/rules/README.md).
+
+## Développement
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\run-tests.ps1 -Live
+```
+
+Les tests utilisent des relevés fictifs (`tests/fixtures.ps1`, aucune donnée d'un vrai PC) et tournent
+à chaque push avec GitHub Actions, avec PSScriptAnalyzer. Les nouveautés sont dans [CHANGELOG.md](CHANGELOG.md).
 
 ## Outils optionnels
 

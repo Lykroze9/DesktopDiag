@@ -34,7 +34,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
-$DDVersion = '0.2.0'
+$DDVersion = '0.3.0'
 $now = Get-Date
 $script:collectErrors = New-Object System.Collections.Generic.List[string]
 

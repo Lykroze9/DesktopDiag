@@ -2,8 +2,11 @@
 
 ## Areas and thresholds
 
-Rate each area 🟢 / 🟡 / 🔴 from the snapshot. When in doubt between two levels, pick the lower
-severity and explain why. Each rating needs one short reason with the actual number.
+**Levels and score come from `scripts/score.ps1`**, which applies `rules/rules.json` (the source of
+truth, shared with the standalone app). green = 🟢, yellow = 🟡, red = 🔴, skipped = area not shown
+(e.g. Battery on a desktop). Each rating needs one short reason with the actual number: use the
+finding texts as a base. The table below is a readable summary of those rules; if it ever
+disagrees with rules.json, rules.json wins.
 
 | Area | 🔴 | 🟡 | 🟢 |
 |---|---|---|---|
@@ -16,6 +19,8 @@ severity and explain why. Each rating needs one short reason with the actual num
 | **Performance now** | RAM > 90% or commit > 95% | RAM > 80%, commit > 85%, one process > 50% CPU | OK |
 | **Boot time** | Admin full boot > 120 s (SSD system drive) | Firmware time > 30 s, or admin full boot 60-120 s, or a recurring boot slowdown > 10 s | OK, or no data |
 | **Heat / throttling** | CPU throttling events (Kernel-Processor-Power 37) in the last 7 days on a desktop or on AC power, together with crashes or the user's symptom; thermal zone > 95 °C | A few throttling events in 30 days; `cpuPerfLimitPct` < 100 at idle; thermal zone > 85 °C | None |
+| **Network** | DNS not responding, router not responding | Wi-Fi signal < 50%, >= 5 drops in 7 days, DNS > 300 ms, router > 50 ms | OK |
+| **Battery** (laptops only) | Health < 60% of design capacity | Health < 80% | OK |
 | **Maintenance** | (rarely red) | Reboot pending, uptime > 14 days, > 15 startup entries, temp folders > 5 GB | OK |
 
 Score = 100 - 8 per 🟡 - 18 per 🔴, minimum 0.
@@ -58,6 +63,8 @@ The score is a summary for humans. Never let it hide a red item: list every 🔴
 | Performances (maintenant) | | |
 | Démarrage | | |
 | Chauffe | | |
+| Réseau | | |
+| Batterie (portable) | | |
 | Entretien | | |
 
 ### Depuis le dernier check (<date>)
@@ -94,6 +101,8 @@ The score is a summary for humans. Never let it hide a red item: list every 🔴
 | Performance (now) | | |
 | Boot time | | |
 | Heat | | |
+| Network | | |
+| Battery (laptop) | | |
 | Maintenance | | |
 
 ### Since last check (<date>)

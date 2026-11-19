@@ -1,0 +1,25 @@
+name: "💡 Missing check or idea / Contrôle manquant ou idée"
+description: "Suggest a check, an improvement or a new language. / Propose un contrôle, une amélioration ou une nouvelle langue."
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        English or French, both are fine. / En français ou en anglais, au choix.
+  - type: textarea
+    id: idea
+    attributes:
+      label: "Your idea / Ton idée"
+      description: "What should DesktopDiag check or do? / Que devrait vérifier ou faire DesktopDiag ?"
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: "Why it matters / Pourquoi c'est utile"
+      description: "A real problem you or someone had helps a lot. / Un vrai problème que toi ou quelqu'un a rencontré aide beaucoup."
+  - type: textarea
+    id: source
+    attributes:
+      label: "Where Windows keeps this information (if you know) / Où Windows garde cette info (si tu sais)"
+      description: "Event log, command, WMI class... / Journal d'événements, commande, classe WMI..."

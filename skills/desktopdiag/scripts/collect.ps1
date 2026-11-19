@@ -45,7 +45,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
-$DDVersion = '0.2.0'
+$DDVersion = '0.3.0'
 $now = Get-Date
 $script:collectErrors = New-Object System.Collections.Generic.List[string]
 
@@ -447,6 +447,18 @@ $snap.thermal = Invoke-Safe 'thermal' {
     }
 }
 
+# ---------------------------------------------------------------- memory test (Windows Memory Diagnostic)
+# 1101/1201 = no errors, 1102/1202 = hardware errors detected. Sample kept so the agent can confirm.
+$snap.memoryDiagnostics = Invoke-Safe 'memorydiag' {
+    $md = Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'Microsoft-Windows-MemoryDiagnostics-Results' } -MaxEvents 1 -ErrorAction SilentlyContinue
+    if ($md) {
+        $bad = @(1102, 1202) -contains $md.Id
+        [ordered]@{ lastRun = ConvertTo-Iso $md.TimeCreated; eventId = $md.Id; result = $(if ($bad) { 'errors' } else { 'noErrors' }); errorsFound = $bad; sample = Get-ShortMessage $md 160 }
+    } else {
+        [ordered]@{ lastRun = $null; eventId = $null; result = $null; errorsFound = $null; sample = $null }
+    }
+}
+
 # ---------------------------------------------------------------- devices
 $snap.problemDevices = @(Invoke-Safe 'problemDevices' {
     @(Get-CimInstance Win32_PnPEntity -Filter 'ConfigManagerErrorCode <> 0' | ForEach-Object {
@@ -520,6 +532,19 @@ $snap.maintenance = Invoke-Safe 'maintenance' {
         userTempGB    = Get-FolderSizeGB $env:TEMP
         windowsTempGB = Get-FolderSizeGB "$env:SystemRoot\Temp"
         downloadsGB   = Get-FolderSizeGB (Join-Path $env:USERPROFILE 'Downloads')
+        pagefile      = Invoke-Safe 'pagefile' {
+            [ordered]@{
+                automatic = [bool]$cs.AutomaticManagedPagefile
+                files     = @(Get-CimInstance Win32_PageFileUsage -ErrorAction Stop | ForEach-Object {
+                    [ordered]@{ path = $_.Name; allocatedGB = [math]::Round($_.AllocatedBaseSize / 1024, 1); currentUsageGB = [math]::Round($_.CurrentUsage / 1024, 1); peakUsageGB = [math]::Round($_.PeakUsage / 1024, 1) }
+                })
+            }
+        }
+        hibernation   = Invoke-Safe 'hibernation' {
+            $he = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Power' -ErrorAction SilentlyContinue).HibernateEnabled
+            $hf = Get-ChildItem -LiteralPath "$env:SystemDrive\" -Force -Filter 'hiberfil.sys' -ErrorAction SilentlyContinue | Select-Object -First 1
+            [ordered]@{ enabled = $(if ($null -ne $he) { [int]$he -eq 1 } else { $null }); hiberfilGB = $(if ($hf) { ConvertTo-GB $hf.Length } else { 0 }) }
+        }
     }
 }
 
@@ -529,15 +554,69 @@ $snap.network = @(Invoke-Safe 'network' {
     })
 })
 
+# Network health: Wi-Fi signal (netsh output is localized: match EN and FR labels), gateway ping,
+# DNS lookup time (Microsoft connectivity-test names Windows already queries), link drops.
+$snap.networkHealth = Invoke-Safe 'networkHealth' {
+    $wifi = $null
+    $ns = @(netsh wlan show interfaces 2>$null)
+    $sig = $ns | Where-Object { $_ -match '^\s*Signal\s*:\s*(\d+)\s*%' } | Select-Object -First 1
+    if ($sig -and $sig -match '(\d+)\s*%') {
+        $pct = [int]$Matches[1]
+        $val = { param($re) $l = $ns | Where-Object { $_ -match $re } | Select-Object -First 1; if ($l) { ($l -split ':', 2)[1].Trim() } else { $null } }
+        $wifi = [ordered]@{
+            signalPct = $pct
+            band      = & $val '^\s*(Band|Bande)\s*:'
+            radio     = & $val '^\s*(Radio type|Type de radio)\s*:'
+            rxMbps    = & $val '(Receive rate|r.ception)'
+            txMbps    = & $val '(Transmit rate|transmission)'
+        }
+    }
+    $gwPing = Invoke-Safe 'gateway' {
+        $gw = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction Stop | Sort-Object RouteMetric | Select-Object -First 1).NextHop
+        if ($gw) {
+            $r = @(Test-Connection -ComputerName $gw -Count 3 -ErrorAction SilentlyContinue)
+            if ($r.Count) { [math]::Round(($r | Measure-Object ResponseTime -Average).Average) } else { -1 }
+        }
+    }
+    $dnsTimes = @(foreach ($n in 'www.msftconnecttest.com', 'dns.msftncsi.com') {
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        try { $null = Resolve-DnsName -Name $n -DnsOnly -ErrorAction Stop; $sw.ElapsedMilliseconds } catch { $null }
+    }) | Where-Object { $null -ne $_ }
+    $drivers = @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue | ForEach-Object { ($_.DriverFileName -replace '\.sys$', '') } | Where-Object { $_ })
+    $linkDown = @($sysEvents | Where-Object { $_.Id -eq 27 -and $drivers -contains $_.ProviderName })
+    $wlanDown = @(Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-WLAN-AutoConfig/Operational'; Id = 8003; StartTime = $winStart } -ErrorAction SilentlyContinue)
+    [ordered]@{
+        wifi          = $wifi
+        gatewayPingMs = $gwPing
+        dnsMs         = if ($dnsTimes.Count) { ($dnsTimes | Measure-Object -Minimum).Minimum } else { $null }
+        dnsOk         = ($dnsTimes.Count -gt 0)
+        disconnects   = @(@(New-EventGroup $linkDown { '{0}/27 link down' -f $_.ProviderName } 20) + @(New-EventGroup $wlanDown { 'WLAN-AutoConfig/8003' } 20))
+    }
+}
+
+# Battery: powercfg /batteryreport works without admin and gives design vs full charge capacity.
 $snap.battery = Invoke-Safe 'battery' {
     $b = Get-CimInstance Win32_Battery | Select-Object -First 1
     if ($b) {
-        $full = Invoke-Safe 'battery-full' { (Get-CimInstance -Namespace root\wmi -ClassName BatteryFullChargedCapacity | Select-Object -First 1).FullChargedCapacity }
-        $design = Invoke-Safe 'battery-design' { (Get-CimInstance -Namespace root\wmi -ClassName BatteryStaticData | Select-Object -First 1).DesignedCapacity }
+        $xmlPath = Join-Path $env:TEMP ('DesktopDiag-battery-{0}.xml' -f $PID)
+        $script:batDesign = $null; $script:batFull = $null; $script:batCycles = $null
+        Invoke-Safe 'batteryreport' {
+            $null = & powercfg.exe /batteryreport /xml /output $xmlPath 2>$null
+            if (Test-Path -LiteralPath $xmlPath) {
+                [xml]$x = [IO.File]::ReadAllText($xmlPath)
+                $bat = @($x.BatteryReport.Batteries.Battery)[0]
+                if ($bat) { $script:batDesign = [double]$bat.DesignCapacity; $script:batFull = [double]$bat.FullChargeCapacity; $script:batCycles = $bat.CycleCount }
+                Remove-Item -LiteralPath $xmlPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+        $design = $script:batDesign; $full = $script:batFull; $cycles = $script:batCycles
         [ordered]@{
-            chargePct = $b.EstimatedChargeRemaining
-            status    = $b.BatteryStatus
-            healthPct = if ($full -and $design) { [math]::Round($full / $design * 100) } else { $null }
+            chargePct  = $b.EstimatedChargeRemaining
+            status     = $b.BatteryStatus
+            designWh   = if ($design) { [math]::Round($design / 1000, 1) } else { $null }
+            fullWh     = if ($full) { [math]::Round($full / 1000, 1) } else { $null }
+            healthPct  = if ($full -and $design) { [math]::Round($full / $design * 100) } else { $null }
+            cycleCount = if ($cycles) { [int]$cycles } else { $null }
         }
     }
 }
@@ -599,69 +678,15 @@ if ($OutFile) {
     $written += (Resolve-Path -LiteralPath $OutFile).Path
 }
 
-function Get-GroupDigest {
-    param($Groups, [int]$Max = 10)
-    @($Groups | Where-Object { $_ } | Select-Object -First $Max | ForEach-Object {
-        [ordered]@{ key = $_.key; count = $_.count; first = $_.first; last = $_.last }
-    })
-}
-
 if ($Summary) {
-    # Invariant culture so numbers in digest strings use a dot (106.4, not 106,4).
-    [Threading.Thread]::CurrentThread.CurrentCulture = [Globalization.CultureInfo]::InvariantCulture
-    $s = $snap
-    $sec = $s.security
-    $digest = [ordered]@{
-        fullSnapshot = if ($written.Count) { $written[0] } else { $null }
-        meta         = [ordered]@{ version = $DDVersion; timestamp = $s.meta.timestamp; utcOffset = $s.meta.utcOffset; uiCulture = $s.meta.uiCulture; windowDays = $Days; crashDays = $CrashDays; needsAdmin = $s.meta.needsAdmin; collectErrors = $s.meta.collectErrors }
-        system       = $s.system
-        hardware     = if ($s.hardware) { [ordered]@{
-            model = ('{0} {1}' -f $s.hardware.manufacturer, $s.hardware.model).Trim(); board = $s.hardware.board
-            bios = ('{0} ({1})' -f $s.hardware.biosVersion, $s.hardware.biosDate); cpu = $s.hardware.cpu; ramGB = $s.hardware.ramTotalGB
-            ramModules = @($s.hardware.ramModules).Count; ramRunningMHz = @($s.hardware.ramModules | ForEach-Object { $_.runningMHz } | Select-Object -Unique)
-            gpus = @($s.hardware.gpus | ForEach-Object { [ordered]@{ name = $_.name; driver = $(if ($_.nvidiaVersion) { $_.nvidiaVersion } else { $_.driverVersion }); driverDate = $_.driverDate; status = $_.status } })
-            isLaptop = $s.hardware.isLaptop } } else { $null }
-        load         = if ($s.load) { [ordered]@{ cpuPct = $s.load.cpuPct; ramUsedPct = $s.load.ramUsedPct; commitUsedPct = $s.load.commitUsedPct
-            topCpu = @($s.load.topCpu | Select-Object -First 3 | ForEach-Object { '{0} {1}%' -f $_.name, $_.cpuPct })
-            topMemory = @($s.load.topMemory | Select-Object -First 3 | ForEach-Object { '{0} {1}MB' -f $_.name, $_.memMB }) } } else { $null }
-        boot         = if ($s.boot) { [ordered]@{ lastFirmwareSec = $s.boot.lastFirmwareSec; avgFirmwareSec = $s.boot.avgFirmwareSec; fastStartupEnabled = $s.boot.fastStartupEnabled
-            bootTypes = @($s.boot.recentBoots | Group-Object { $_.bootType } | ForEach-Object { '{0} x{1}' -f $_.Name, $_.Count }) } } else { $null }
-        thermal      = if ($s.thermal) { [ordered]@{ cpuThrottleEvents = @(Get-GroupDigest $s.thermal.cpuThrottleEvents); cpuPerfLimitPct = $s.thermal.cpuPerfLimitPct; cpuPctOfMaxFreq = $s.thermal.cpuPctOfMaxFreq; thermalZones = $s.thermal.thermalZones } } else { $null }
-        storage      = if ($s.storage) { [ordered]@{
-            volumes = @($s.storage.volumes | ForEach-Object { '{0} {1} {2}/{3}GB free ({4}%)' -f $_.drive, $_.type, $_.freeGB, $_.sizeGB, $_.freePct })
-            disks = @($s.storage.physicalDisks | ForEach-Object { $r = $_.reliability; [ordered]@{ number = $_.number; name = $_.name; bus = $_.bus; media = $_.media; health = $_.health
-                tempC = $(if ($r) { $r.temperatureC } else { $null }); wearPct = $(if ($r) { $r.wearPct } else { $null }); readUncorrected = $(if ($r) { $r.readUncorrected } else { $null }) } }) } } else { $null }
-        stability    = if ($s.stability) { [ordered]@{
-            unexpectedShutdowns = @($s.stability.unexpectedShutdowns).Count
-            lastShutdowns = @($s.stability.unexpectedShutdowns | Select-Object -First 5 | ForEach-Object { '{0} {1}' -f $_.time, $_.bugcheckCode })
-            bugchecks = @($s.stability.bugchecks | Select-Object -First 5 | ForEach-Object { '{0} {1}' -f $_.time, $_.bugcheck })
-            dirtyShutdowns = $s.stability.dirtyShutdownCount; boots = $s.stability.bootCount
-            reliabilityIndex = $s.stability.reliabilityIndex; minidumps = @($s.stability.minidumps).Count; minidumpsReadable = $s.stability.minidumpsReadable } } else { $null }
-        gpuEvents       = @(Get-GroupDigest $s.gpuEvents)
-        diskEvents      = @(Get-GroupDigest $s.diskEvents)
-        hardwareErrors  = @(Get-GroupDigest $s.hardwareErrors)
-        tpmEvents       = @(Get-GroupDigest $s.tpmEvents 5)
-        serviceFailures = @(Get-GroupDigest $s.serviceFailures 8)
-        topSystemErrors = @(Get-GroupDigest $s.topSystemErrors 8)
-        appCrashes      = if ($s.appCrashes) { [ordered]@{ crashes = @($s.appCrashes.crashes | Select-Object -First 5 | ForEach-Object { '{0} x{1} (last {2})' -f $_.key, $_.count, $_.last }); hangs = @($s.appCrashes.hangs | Select-Object -First 5 | ForEach-Object { '{0} x{1}' -f $_.key, $_.count }) } } else { $null }
-        problemDevices  = @($s.problemDevices | ForEach-Object { '{0} (code {1}, present {2})' -f $_.name, $_.errorCode, $_.present })
-        security        = if ($sec) { [ordered]@{
-            defender = $sec.defender; antivirus = @($sec.antivirusProducts | ForEach-Object { '{0} enabled={1} upToDate={2}' -f $_.name, $_.enabled, $_.upToDate })
-            firewallOff = @($sec.firewall | Where-Object { -not $_.enabled } | ForEach-Object { $_.profile })
-            wuLastSuccess = $(if ($sec.windowsUpdate) { $sec.windowsUpdate.lastSuccess } else { $null }); wuRecentFailures = $(if ($sec.windowsUpdate) { @($sec.windowsUpdate.recentFailures).Count } else { $null })
-            rebootPending = $sec.rebootPending; uac = $sec.uacEnabled; secureBoot = $sec.secureBoot } } else { $null }
-        maintenance     = if ($s.maintenance) { [ordered]@{ startupCount = $s.maintenance.startupCount; startup = @($s.maintenance.startup | ForEach-Object { $_.name }); userTempGB = $s.maintenance.userTempGB; windowsTempGB = $s.maintenance.windowsTempGB; downloadsGB = $s.maintenance.downloadsGB } } else { $null }
-        network         = @($s.network | ForEach-Object { '{0}: {1} {2}' -f $_.name, $_.status, $_.linkSpeed })
-        battery         = $s.battery
-    }
-    if ($s.extra) { $digest.extra = [ordered]@{ wingetUpgrades = $(if ($s.extra.wingetUpgrades) { $s.extra.wingetUpgrades.count } else { $null }); drivers = @($s.extra.drivers).Count } }
-    $out = $digest | ConvertTo-Json -Depth 6 -Compress
-    if ($Anonymize) {
-        foreach ($f in @($env:USERPROFILE, $env:USERNAME, $env:COMPUTERNAME)) {
-            if ($f) { $out = [regex]::Replace($out, [regex]::Escape(($f -replace '\\', '\\')), '<redacted>', 'IgnoreCase') }
-        }
-    }
-    $out
+    # Compact digest built by summarize.ps1 from the written snapshot.
+    $src = if ($written.Count) { $written[0] } else { $null }
+    $tmp = $null
+    if (-not $src) { $tmp = Join-Path $env:TEMP ('DesktopDiag-{0}.json' -f $PID); [IO.File]::WriteAllText($tmp, $json, $utf8); $src = $tmp }
+    $sumArgs = @{ Path = $src }
+    if ($Anonymize) { $sumArgs.Anonymize = $true }
+    & (Join-Path $PSScriptRoot 'summarize.ps1') @sumArgs
+    if ($tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
 } elseif ($Stdout -or $written.Count -eq 0) {
     $publicJson
 } else {

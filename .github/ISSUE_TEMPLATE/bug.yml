@@ -1,0 +1,46 @@
+name: "🐛 Bug or wrong diagnosis / Bug ou diagnostic faux"
+description: "Something broke, or DesktopDiag got your PC wrong. / Quelque chose a planté, ou DesktopDiag s'est trompé sur ton PC."
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time! English or French, both are fine.
+        Merci de prendre le temps ! En français ou en anglais, au choix.
+
+        **Privacy / Confidentialité:** only paste an **anonymized** report (ask Claude for "a shareable report" / « un rapport partageable », or run `collect.ps1 -Anonymize -OutFile report.json`). It removes your user name, PC name and paths.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: "What happened? / Que s'est-il passé ?"
+      options:
+        - "Wrong or exaggerated diagnosis / Diagnostic faux ou exagéré"
+        - "Missed a real problem / Un vrai problème non détecté"
+        - "A script failed or errored / Un script a planté ou affiche une erreur"
+        - "Install problem / Problème d'installation"
+        - "Other / Autre"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: "Describe it / Décris le problème"
+      description: "What did DesktopDiag say, and what is actually true? / Qu'a dit DesktopDiag, et qu'en est-il vraiment ?"
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: "Anonymized report or error message / Rapport anonymisé ou message d'erreur"
+      description: "Optional but very helpful. / Facultatif mais très utile."
+      render: text
+  - type: input
+    id: windows
+    attributes:
+      label: "Windows version / Version de Windows"
+      placeholder: "Windows 11 24H2"
+  - type: input
+    id: version
+    attributes:
+      label: "DesktopDiag version"
+      placeholder: "0.3.0"

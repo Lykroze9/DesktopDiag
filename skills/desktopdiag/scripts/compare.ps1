@@ -89,6 +89,15 @@ $out.newHardwareErrors = @(Compare-Groups $cur.hardwareErrors)
 $out.newTpmEvents      = @(Compare-Groups $cur.tpmEvents)
 $out.newCpuThrottleEvents = @(Compare-Groups $cur.thermal.cpuThrottleEvents)
 
+# RAM test, network drops, battery (sections added in 0.3.0)
+if ($cur.memoryDiagnostics -and $cur.memoryDiagnostics.lastRun -and ([datetime]$cur.memoryDiagnostics.lastRun) -gt $since) {
+    $out.newMemoryTest = [ordered]@{ lastRun = $cur.memoryDiagnostics.lastRun; result = $cur.memoryDiagnostics.result }
+}
+if ($cur.networkHealth) { $out.newNetworkDrops = @(Compare-Groups $cur.networkHealth.disconnects) }
+if ($cur.battery -and $null -ne $cur.battery.healthPct) {
+    $out.battery = [ordered]@{ healthPct = $cur.battery.healthPct; previousHealthPct = $(if ($prev.battery) { $prev.battery.healthPct } else { $null }) }
+}
+
 # Boot (firmware + boot manager time; snapshots older than 0.2.0 have no boot section)
 if ($cur.boot) {
     $out.boot = [ordered]@{

@@ -34,6 +34,10 @@ a proposal the user must approve, action by action (see `references/remediation.
 | Disk, SSD, USB drive / disque, SSD, clé USB | `storage`, `diskEvents` | `storage.md` |
 | Game crashes / jeux qui plantent | `appCrashes`, `gpuEvents`, `stability` | `gpu.md` |
 | Security worries / sécurité | `security` | `report.md` |
+| Internet drops, slow Wi-Fi / internet qui coupe, Wi-Fi lent | `networkHealth`, `network` | `more-checks.md` |
+| Battery drains fast / batterie qui se vide vite | `battery`, `load` | `more-checks.md` |
+| Random crashes, suspect RAM / plantages aléatoires, RAM | `memoryDiagnostics`, `hardwareErrors`, `bugchecks` | `more-checks.md`, `bsod.md` |
+| C: full / disque C: plein | `storage.volumes`, `maintenance` (pagefile, hibernation, temp, downloads) | `storage.md`, `more-checks.md` |
 
 ### 2. Collect
 
@@ -60,6 +64,21 @@ It prints JSON: free space deltas, crashes/GPU/disk/hardware/CPU-throttling even
 the previous snapshot**, firmware boot time vs before, driver/BIOS/build changes, startup entries added or removed, devices newly failing or
 fixed. Use it for the "Since last check" section. Skip silently if `comparable` is false.
 
+### 3b. Score
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "<skill-dir>\scripts\score.ps1"
+```
+
+It applies `rules/rules.json` to the newest snapshot and prints the score, each area's level
+(green / yellow / red / skipped) and the findings that set it, in the snapshot's language
+(`-Lang fr|en` to force). After the admin step, run it again with `-Admin <admin json>` (SMART and
+boot time can change disk health and boot levels). **Use this score and these levels as they are**
+so the same PC always gets the same score. You add the explanations, the context (e.g. a red that
+comes from an old cause already fixed: say so in the text) and the recommendations. If you think a
+level is wrong, keep it and say why in one line; the rule can be fixed later. `-Full` adds the
+computed facts if you need to see why a rule fired.
+
 ### 4. Optional admin deep scan
 
 Propose it when it would change the conclusion: SSD health needed, crash dumps to analyse,
@@ -85,6 +104,7 @@ Load only the references you need:
 - `references/gpu.md` - TDR, black screens, triage order.
 - `references/storage.md` - free space, SMART/NVMe thresholds, disk errors.
 - `references/performance.md` - boot time, CPU throttling, temperatures.
+- `references/more-checks.md` - RAM test, battery, network, page file and hibernation file.
 - `references/report.md` - scoring rubric and FR/EN templates. **Always load before writing the report.**
 - `references/remediation.md` - risk levels and safe execution. Load before proposing any fix.
 - `references/followup.md` - follow-up cadence, scheduling, prompt templates. Load before scheduling.
@@ -97,7 +117,7 @@ Cross-check before concluding:
 
 ### 6. Report
 
-Follow `references/report.md`: score, table of areas, "since last check", what matters,
+Follow `references/report.md`: score and area levels from `score.ps1`, table of areas, "since last check", what matters,
 3-5 recommendations (each saying whether you can do it after their OK or they must do it),
 what was not checked, and the proposed next check (step 7).
 

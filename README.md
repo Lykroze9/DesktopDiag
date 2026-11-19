@@ -9,8 +9,8 @@ DesktopDiag scans your Windows PC and tells you in plain words what's wrong, and
 > commercial product and it is far from finished.
 >
 > **Your feedback is very welcome!** Tried it? Found a bug, a wrong diagnosis, a missing check, or
-> just have an idea? Please [open an issue](https://github.com/Lykroze9/DesktopDiag/issues), in
-> English or French. Every comment helps make the skill better.
+> just have an idea? Please [open an issue](https://github.com/Lykroze9/DesktopDiag/issues) or start a
+> [discussion](https://github.com/Lykroze9/DesktopDiag/discussions), in English or French. Every comment helps make the skill better.
 
 **Read-only Windows PC health check for Claude Code.** Ask "check my PC" or describe a problem
 ("my screen goes black in games", "random reboots") and Claude collects the data, explains it in
@@ -25,12 +25,14 @@ plain language, scores your PC and tells you what to do next. Reports in **Engli
 | Stability | Blue screens (stop code + parameters), unexpected shutdowns, crash dumps, Windows reliability index |
 | Graphics | Display driver resets (TDR), NVIDIA/AMD/Intel driver errors, driver version and age, overclocking tools at startup |
 | Storage | Free space, disk health, SSD wear/temperature/errors (SMART via smartctl), disk errors mapped to the right drive (USB vs system SSD) |
-| Hardware | WHEA hardware errors (CPU, RAM, PCIe), TPM errors, devices in error (code 10/43...) |
+| Hardware | WHEA hardware errors (CPU, RAM, PCIe), Windows Memory Diagnostic result, TPM errors, devices in error (code 10/43...) |
 | Security | Antivirus status, firewall profiles, last successful Windows Update and recent failures, pending reboot, UAC, Secure Boot |
 | Performance | Real CPU % (sampled, not cumulative), RAM and commit usage, top processes |
 | Boot time | Firmware/BIOS time of each boot, Fast Startup; with admin: total boot time and what slowed each boot down (app, driver, service) |
 | Heat | CPU throttling by firmware (heat or power limits), live performance limit, thermal zones when the PC exposes them |
-| Maintenance | Startup entries, temp folders, uptime |
+| Network | Wi-Fi signal, router ping, DNS response time, Wi-Fi and Ethernet drops |
+| Battery | Laptops: health (current vs original capacity) and charge cycles |
+| Maintenance | Startup entries, temp folders, uptime, page file and hibernation file size |
 | History | Every check is saved locally and compared with the previous one: new crashes since last time, space lost, driver/BIOS updates, startup entries added |
 | Follow-up | After each report, Claude proposes the next check sized to what it found (in 2-4 days after a fix, weekly while problems settle, monthly otherwise) and schedules it on your OK with the Claude desktop app's local scheduled tasks |
 
@@ -83,6 +85,21 @@ Add `-Summary` to `collect.ps1` for a compact digest (about 10x smaller than the
 Claude uses it by default, so each check costs far fewer tokens.
 
 Snapshots are stored in `%LOCALAPPDATA%\DesktopDiag\history`.
+
+## Score
+
+The score and the area levels come from `skills/desktopdiag/rules/rules.json`, applied by
+`scripts/score.ps1`: the same PC always gets the same score, and Claude adds the explanations.
+Thresholds are documented in [rules/README.md](skills/desktopdiag/rules/README.md).
+
+## Development
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\run-tests.ps1 -Live
+```
+
+Tests use synthetic snapshots (`tests/fixtures.ps1`, no real machine data) and run on every push
+with GitHub Actions, together with PSScriptAnalyzer. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 ## Optional tools
 

@@ -1,6 +1,6 @@
 {
   "name": "desktopdiag",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Read-only Windows PC health check for Claude Code: crashes/BSOD, GPU driver resets (TDR), SSD SMART wear, hardware errors, security, startup bloat, with history comparison. Reports in French or English.",
   "author": {
     "name": "Lykroze"
