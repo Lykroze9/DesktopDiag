@@ -181,15 +181,18 @@ fieldset label input[type=checkbox] { width: 18px; height: 18px; accent-color: v
 .whatsnew-list li + li { margin-top: 6px; }
 button:disabled { opacity: .55; cursor: default; }
 
-/* feedback card after a check */
-.feedback { position: fixed; right: 20px; bottom: 64px; width: min(320px, calc(100vw - 40px)); z-index: 15; padding: 16px 18px 10px; border-radius: var(--radius); background: var(--surface); border: var(--border-w) solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,.25); animation: fb-in .3s ease-out; }
+/* feedback card after a check: floats above the footer and slides up from under it */
+.footer { position: relative; z-index: 20; background: var(--bg); }
+.feedback { position: fixed; right: 32px; bottom: 84px; width: min(292px, calc(100vw - 48px)); z-index: 15; padding: 14px 14px 8px; border-radius: 14px; background: var(--surface); border: var(--border-w) solid var(--border); box-shadow: 0 14px 36px rgba(0,0,0,.28), 0 2px 6px rgba(0,0,0,.12); animation: fb-in .55s cubic-bezier(.2,.8,.2,1); }
 .feedback p { margin: 0; }
-.feedback-title { font-weight: 700; padding-right: 28px; }
-.feedback-text { color: var(--muted); font-size: .92rem; margin-top: 2px !important; }
-.feedback-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
-.feedback-close { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; }
-.feedback .link { font-size: .82rem; color: var(--muted); padding: 8px 0 0; font-weight: 400; }
-@keyframes fb-in { from { transform: translateY(12px); opacity: 0; } }
+.feedback-title { font-weight: 700; font-size: .86rem; white-space: nowrap; padding-right: 20px; }
+.feedback-text { color: var(--muted); font-size: .84rem; margin-top: 2px !important; }
+.feedback-actions { display: flex; gap: 6px; margin-top: 10px; }
+.feedback-actions button.small-btn { font-size: .8rem; padding: 6px 10px; border-radius: 9px; white-space: nowrap; }
+.feedback-close { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; }
+.feedback-close svg { width: 16px; height: 16px; }
+.feedback .link { font-size: .76rem; color: var(--muted); padding: 6px 0 0; font-weight: 400; }
+@keyframes fb-in { from { transform: translateY(150px); opacity: .4; } }
 @media (prefers-reduced-motion: reduce) { .feedback { animation: none; } }
 /* symptoms */
 .symptom-label { margin: 26px 0 8px; }
