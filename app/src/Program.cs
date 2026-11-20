@@ -459,7 +459,8 @@ namespace DesktopDiag
             { "battery",       new[] { "ms-settings:batterysaver", "" } },
             { "backup",        new[] { "ms-settings:backup", "" } },
             { "releases",      new[] { Updater.Page, "" } },
-            { "help",          new[] { "https://github.com/Lykroze9/DesktopDiag/discussions", "" } }
+            { "help",          new[] { "https://github.com/Lykroze9/DesktopDiag/discussions", "" } },
+            { "repo",          new[] { "https://github.com/Lykroze9/DesktopDiag", "" } }
         };
 
         // ---------------------------------------------------------- updates

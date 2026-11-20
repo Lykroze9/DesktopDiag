@@ -99,6 +99,7 @@
         break;
       case "checkDone":
         adminStates[m.path] = m.admin || null;
+        state.justChecked = true;
         state.history = state.history.filter(function (h) { return h.path !== m.path; });
         state.history.unshift({ path: m.path, name: fileName(m.path) });
         state.resultSymptom = state.symptom;
@@ -360,8 +361,20 @@
     startSince(m.path, adviceIds);
     renderAdmin(m.admin, adminStates[m.path]);
     show("results");
+    if (state.justChecked) { state.justChecked = false; showFeedback(); }
   }
 
+  // ---- after a finished check: small GitHub feedback card (bottom right), can be turned off
+  function showFeedback() {
+    try { if (localStorage.getItem("dd.noFeedback") === "1") return; } catch (e) { }
+    setTimeout(function () { $("feedback").hidden = false; }, 1500);
+  }
+  $("btn-feedback-close").addEventListener("click", function () { $("feedback").hidden = true; });
+  $("btn-feedback-never").addEventListener("click", function () {
+    try { localStorage.setItem("dd.noFeedback", "1"); } catch (e) { }
+    $("feedback").hidden = true;
+  });
+  $("feedback").addEventListener("click", function (e) { if (e.target.closest("[data-open]")) $("feedback").hidden = true; });
   // ---- deep scan (admin) section
   var adminStates = {}; // snapshot path -> "ok" | "declined" | "failed" (this session only)
 

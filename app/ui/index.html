@@ -211,6 +211,18 @@
   </form>
 </dialog>
 
+<!-- After a finished check: invite to give feedback on GitHub -->
+<aside id="feedback" class="feedback no-print" role="status" hidden>
+  <button type="button" class="icon-btn feedback-close" id="btn-feedback-close" data-i18n-aria="close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <p class="feedback-title" data-i18n="feedbackTitle"></p>
+  <p class="feedback-text" data-i18n="feedbackText"></p>
+  <div class="feedback-actions">
+    <button type="button" class="primary small-btn" data-open="repo" data-i18n="feedbackRepo"></button>
+    <button type="button" class="secondary small-btn" data-open="help" data-i18n="feedbackAsk"></button>
+  </div>
+  <button type="button" class="link small" id="btn-feedback-never" data-i18n="feedbackNever"></button>
+</aside>
+
 <div id="toast" class="toast" role="status" hidden></div>
 
 <script src="i18n.js"></script>

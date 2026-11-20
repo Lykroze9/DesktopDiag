@@ -181,6 +181,16 @@ fieldset label input[type=checkbox] { width: 18px; height: 18px; accent-color: v
 .whatsnew-list li + li { margin-top: 6px; }
 button:disabled { opacity: .55; cursor: default; }
 
+/* feedback card after a check */
+.feedback { position: fixed; right: 20px; bottom: 64px; width: min(320px, calc(100vw - 40px)); z-index: 15; padding: 16px 18px 10px; border-radius: var(--radius); background: var(--surface); border: var(--border-w) solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,.25); animation: fb-in .3s ease-out; }
+.feedback p { margin: 0; }
+.feedback-title { font-weight: 700; padding-right: 28px; }
+.feedback-text { color: var(--muted); font-size: .92rem; margin-top: 2px !important; }
+.feedback-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.feedback-close { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; }
+.feedback .link { font-size: .82rem; color: var(--muted); padding: 8px 0 0; font-weight: 400; }
+@keyframes fb-in { from { transform: translateY(12px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .feedback { animation: none; } }
 /* symptoms */
 .symptom-label { margin: 26px 0 8px; }
 .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 720px; margin: 0 auto; }

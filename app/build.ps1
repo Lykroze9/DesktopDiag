@@ -29,7 +29,7 @@ $exe = Join-Path $out 'DesktopDiag.exe'
 $gen = Join-Path $env:TEMP ('DesktopDiag-Version-{0}.g.cs' -f $PID)
 [IO.File]::WriteAllText($gen, "namespace DesktopDiag { static class AppVersion { public const string Value = `"$Version`"; } }`r`n")
 $cscArgs = @('/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/codepage:65001',
-    "/out:$exe", ('/win32manifest:' + (Join-Path $app 'app.manifest')),
+    "/out:$exe", ('/win32manifest:' + (Join-Path $app 'app.manifest')), ('/win32icon:' + (Join-Path $app 'icon.ico')),
     '/r:System.dll', '/r:System.Drawing.dll', '/r:System.Windows.Forms.dll', '/r:System.Web.Extensions.dll',
     ('/r:' + (Join-Path $lib 'Microsoft.Web.WebView2.Core.dll')), ('/r:' + (Join-Path $lib 'Microsoft.Web.WebView2.WinForms.dll'))) +
     $res + (Get-ChildItem (Join-Path $app 'src') -Filter *.cs | ForEach-Object { $_.FullName }) + $gen
