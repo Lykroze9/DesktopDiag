@@ -29,7 +29,7 @@
     ], facts: { crashes30d: 0, systemFreePct: 9, systemFreeGB: 40, wheaCorrected: 2 } };
     var hist = [{ path: "demo2", name: "20261121-101500" }, { path: "demo1", name: "20261114-093000" }];
     setTimeout(function () {
-      if (msg.type === "init") receive({ type: "init", version: "preview", settings: { lang: state.lang, theme: state.theme, textSize: state.textSize }, history: hist });
+      if (msg.type === "init") receive({ type: "init", version: "0.1.0", whatsNew: location.hash === "#updated", updatedAt: location.hash === "#updated" ? "2026-11-21T14:32:00" : null, updatedFrom: location.hash === "#updated" ? "0.0.9" : null, settings: { lang: state.lang, theme: state.theme, textSize: state.textSize }, history: hist });
       if (msg.type === "scores") receive({ type: "scores", points: [{ name: "20261101-120000", score: 46 }, { name: "20261107-120000", score: 58 }, { name: "20261114-093000", score: 66 }, { name: "20261121-101500", score: 74 }] });
       if (msg.type === "runCheck") setTimeout(function () { receive({ type: "checkDone", path: "demo2" }); }, 3000);
       if (msg.type === "score") receive({ type: "score", id: msg.id, path: msg.path, data: sample, admin: msg.path === "demo2" ? {
@@ -52,6 +52,8 @@
       case "init":
         state.version = m.version;
         state.noUpdateCheck = !!(m.settings && m.settings.noUpdateCheck);
+        state.updatedAt = m.updatedAt || null;
+        state.updatedFrom = m.updatedFrom || null;
         applySettings(m.settings, false);
         state.history = m.history || [];
         renderHome();
@@ -66,6 +68,8 @@
         $("btn-update").disabled = false;
         $("update-banner").hidden = false;
         $("update-status").textContent = T().updateAvailable(m.version);
+        state.newVersion = { version: m.version, notes: m.notes || "" };
+        translate();
         break;
       case "upToDate": $("update-status").textContent = T().upToDate; break;
       case "updateProgress":
@@ -152,7 +156,8 @@
     document.querySelectorAll("[data-i18n]").forEach(function (el) { var v = t[el.dataset.i18n]; if (typeof v === "string") el.textContent = v; });
     document.querySelectorAll("[data-i18n-aria]").forEach(function (el) { el.setAttribute("aria-label", t[el.dataset.i18nAria]); el.title = t[el.dataset.i18nAria]; });
     document.querySelectorAll("[data-lang]").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.lang === state.lang); });
-    $("version").textContent = state.version ? "v" + state.version : "";
+    $("version").textContent = state.version ? "v" + state.version + (state.newVersion ? " · " + t.newVersionShort : "") : "";
+    $("version").classList.toggle("has-update", !!state.newVersion);
     renderSymptoms();
   }
 
@@ -745,13 +750,34 @@
   $("btn-update-later").addEventListener("click", function () { $("update-banner").hidden = true; });
 
   var wn = $("whatsnew");
+  function longDate(iso, withTime) {
+    var d = new Date(iso);
+    if (isNaN(d)) return iso;
+    var s = d.toLocaleDateString(locale(), { day: "numeric", month: "long", year: "numeric" });
+    return withTime ? s + " · " + d.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" }) : s;
+  }
+
   function showWhatsNew(afterUpdate) {
     var entry = (window.WHATSNEW || {})[state.version];
     var t = T();
     $("whatsnew-title").textContent = afterUpdate ? t.whatsNewUpdated(state.version) : t.whatsNewTitle(state.version);
+    // When: date of the update on this PC if there was one, else the release date.
+    var meta = [];
+    if (state.updatedAt) meta.push(t.updatedOn(longDate(state.updatedAt, true), state.updatedFrom));
+    else if (entry && entry.date) meta.push(t.releasedOn(longDate(entry.date + "T12:00:00", false)));
+    $("whatsnew-meta").textContent = meta.join(" ");
+    $("whatsnew-meta").hidden = !meta.length;
     $("whatsnew-list").innerHTML = entry ? entry[state.lang].map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") : "<li>" + esc(t.whatsNewNone) + "</li>";
+    // A newer version waiting: what changes + link + update button.
+    var nv = state.newVersion;
+    $("whatsnew-new").hidden = !nv;
+    if (nv) {
+      $("whatsnew-new-title").textContent = t.updateAvailable(nv.version);
+      $("whatsnew-new-notes").textContent = nv.notes || t.whatsNewNone;
+    }
     if (!wn.open) wn.showModal();
   }
+  $("btn-update-dlg").addEventListener("click", function () { wn.close(); $("btn-update").click(); });
   $("version").addEventListener("click", function () { showWhatsNew(false); });
 
   // Shortcuts: Enter = run (home), Ctrl+C = copy for a forum (results, nothing selected),

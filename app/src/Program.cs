@@ -96,6 +96,8 @@ namespace DesktopDiag
         public bool noUpdateCheck;      // "Ne pas vérifier les mises à jour"
         public string lastUpdateCheck;  // ISO date of the last automatic check
         public string lastVersion;      // version that last ran, for "Quoi de neuf"
+        public string updatedAt;        // ISO date of the last update (first run of a new version)
+        public string updatedFrom;      // version before that update
 
         static string FilePath { get { return Path.Combine(Program.DataRoot, "app-settings.json"); } }
 
@@ -531,7 +533,15 @@ namespace DesktopDiag
         void OpenTarget(string key)
         {
             string[] t;
-            if (key == null || !OpenTargets.TryGetValue(key, out t)) return;
+            // Release pages: built here from known versions, never from a URL sent by the page.
+            if (key == "thisRelease") t = new[] { Updater.Page + "/tag/app-v" + Program.Version, "" };
+            else if (key == "newRelease")
+            {
+                UpdateInfo u = pendingUpdate;
+                if (u == null) return;
+                t = new[] { Updater.Page + "/tag/app-v" + u.version, "" };
+            }
+            else if (key == null || !OpenTargets.TryGetValue(key, out t)) return;
             try
             {
                 ProcessStartInfo psi = new ProcessStartInfo(t[0], t[1]);
@@ -568,8 +578,16 @@ namespace DesktopDiag
             }
             d["history"] = hist;
             // "Quoi de neuf" after an update (not on the very first run).
-            d["whatsNew"] = settings.lastVersion != null && settings.lastVersion != Program.Version;
-            if (settings.lastVersion != Program.Version) { settings.lastVersion = Program.Version; try { settings.Save(); } catch { } }
+            bool updated = settings.lastVersion != null && settings.lastVersion != Program.Version;
+            d["whatsNew"] = updated;
+            if (settings.lastVersion != Program.Version)
+            {
+                if (updated) { settings.updatedFrom = settings.lastVersion; settings.updatedAt = DateTime.Now.ToString("s"); }
+                settings.lastVersion = Program.Version;
+                try { settings.Save(); } catch { }
+            }
+            d["updatedAt"] = settings.updatedAt;
+            d["updatedFrom"] = settings.updatedFrom;
             Send(d);
             CheckUpdate(false);
         }

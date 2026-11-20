@@ -169,6 +169,12 @@ label.check.small { font-size: .9rem; display: flex; text-align: left; margin-to
 fieldset label input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
 .version-link { padding: 0; font-weight: 400; font-size: inherit; color: var(--muted); }
 .version-link:hover { color: var(--accent); }
+.version-link.has-update { color: var(--accent); font-weight: 600; }
+.whatsnew-meta { margin: 6px 0 0; }
+.whatsnew-new { margin-top: 16px; padding: 12px 16px; border-radius: 12px; border: var(--border-w) solid var(--accent); }
+.whatsnew-new h3 { font-size: 1rem; margin: 0 0 4px; }
+.whatsnew-new pre { white-space: pre-wrap; font: inherit; font-size: .9rem; margin: 0; max-height: 180px; overflow: auto; }
+#whatsnew .actions { align-items: center; justify-content: space-between; }
 .whatsnew-list { padding-left: 20px; }
 .whatsnew-list li + li { margin-top: 6px; }
 button:disabled { opacity: .55; cursor: default; }

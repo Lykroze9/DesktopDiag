@@ -128,9 +128,14 @@ window.I18N = {
     upToDate: "Vous avez la dernière version.",
     updateFailed: "Mise à jour impossible : ",
     updateManual: "Voulez-vous ouvrir la page de téléchargement pour la faire à la main ?",
-    whatsNewUpdated: function (v) { return "DesktopDiag est à jour (" + v + ") : quoi de neuf ?"; },
+    whatsNewUpdated: function (v) { return "Mise à jour : version " + v; },
     whatsNewTitle: function (v) { return "Quoi de neuf dans la version " + v; },
-    whatsNewNone: "Améliorations et corrections."
+    whatsNewNone: "Améliorations et corrections.",
+    updatedOn: function (d, from) { return "Mise à jour sur ce PC le " + d + (from ? " (depuis la version " + from + ")." : "."); },
+    releasedOn: function (d) { return "Version publiée le " + d + "."; },
+    seeOnGithub: "Voir la nouvelle version sur GitHub",
+    seeThisVersion: "Tous les détails sur GitHub",
+    newVersionShort: "nouvelle version dispo"
   },
   en: {
     settings: "Settings",
@@ -260,8 +265,13 @@ window.I18N = {
     upToDate: "You have the latest version.",
     updateFailed: "Update failed: ",
     updateManual: "Open the download page to do it by hand?",
-    whatsNewUpdated: function (v) { return "DesktopDiag is up to date (" + v + "): what's new?"; },
+    whatsNewUpdated: function (v) { return "Updated: version " + v; },
     whatsNewTitle: function (v) { return "What's new in version " + v; },
-    whatsNewNone: "Improvements and fixes."
+    whatsNewNone: "Improvements and fixes.",
+    updatedOn: function (d, from) { return "Updated on this PC on " + d + (from ? " (from version " + from + ")." : "."); },
+    releasedOn: function (d) { return "Released on " + d + "."; },
+    seeOnGithub: "See the new version on GitHub",
+    seeThisVersion: "Full details on GitHub",
+    newVersionShort: "new version available"
   }
 };

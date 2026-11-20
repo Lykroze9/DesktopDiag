@@ -28,6 +28,7 @@
     <div class="update-text">
       <strong id="update-title"></strong>
       <details id="update-notes-box"><summary data-i18n="updateNotes"></summary><pre id="update-notes"></pre></details>
+      <button type="button" class="link small" data-open="newRelease" data-i18n="seeOnGithub"></button>
       <div class="progress small-progress" id="update-progress" hidden><div id="update-bar"></div></div>
     </div>
     <button type="button" class="primary" id="btn-update" data-i18n="updateNow"></button>
@@ -193,8 +194,20 @@
 <dialog id="whatsnew">
   <form method="dialog">
     <h2 id="whatsnew-title"></h2>
+    <p id="whatsnew-meta" class="muted small whatsnew-meta"></p>
     <ul id="whatsnew-list" class="whatsnew-list"></ul>
-    <div class="actions"><button class="primary" value="close" data-i18n="close"></button></div>
+    <div id="whatsnew-new" class="whatsnew-new" hidden>
+      <h3 id="whatsnew-new-title"></h3>
+      <pre id="whatsnew-new-notes"></pre>
+      <div class="open-row">
+        <button type="button" class="secondary small-btn" data-open="newRelease"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg><span data-i18n="seeOnGithub"></span></button>
+        <button type="button" class="primary small-btn" id="btn-update-dlg" data-i18n="updateNow"></button>
+      </div>
+    </div>
+    <div class="actions">
+      <button type="button" class="link" data-open="thisRelease" data-i18n="seeThisVersion"></button>
+      <button class="primary" value="close" data-i18n="close"></button>
+    </div>
   </form>
 </dialog>
 
