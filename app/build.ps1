@@ -1,4 +1,4 @@
-﻿# Builds app\bin\DesktopDiag.exe with the .NET Framework 4.8 compiler already on Windows (no SDK).
+# Builds app\bin\DesktopDiag.exe with the .NET Framework 4.8 compiler already on Windows (no SDK).
 # Embeds the WebView2 DLLs (app\lib, see README), the UI (app\ui) and the skill's scripts and rules
 # (single source: skills\desktopdiag). Writes DesktopDiag.exe.sha256 next to the exe.
 param([switch]$Run, [string]$Version, [string]$OutDir)
