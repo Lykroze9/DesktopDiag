@@ -23,6 +23,17 @@
 </header>
 
 <main>
+  <div id="update-banner" class="update-banner no-print" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+    <div class="update-text">
+      <strong id="update-title"></strong>
+      <details id="update-notes-box"><summary data-i18n="updateNotes"></summary><pre id="update-notes"></pre></details>
+      <div class="progress small-progress" id="update-progress" hidden><div id="update-bar"></div></div>
+    </div>
+    <button type="button" class="primary" id="btn-update" data-i18n="updateNow"></button>
+    <button type="button" class="icon-btn" id="btn-update-later" data-i18n-aria="later"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+
   <!-- Home -->
   <section id="screen-home" class="screen">
     <div class="hero">
@@ -135,7 +146,7 @@
 
 <footer class="footer">
   <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/></svg> <span data-i18n="privacy"></span></span>
-  <span id="version"></span>
+  <button type="button" class="link version-link" id="version"></button>
 </footer>
 
 <!-- Settings -->
@@ -155,6 +166,11 @@
       <label><input type="radio" name="size" value="125"> 125 %</label>
       <label><input type="radio" name="size" value="150"> 150 %</label>
     </fieldset>
+    <fieldset>
+      <legend data-i18n="updatesTitle"></legend>
+      <label><input type="checkbox" id="opt-autoupdate"> <span data-i18n="autoUpdate"></span></label>
+      <div class="update-row"><button type="button" class="secondary small-btn" id="btn-check-update" data-i18n="checkNow"></button><span id="update-status" class="muted small" aria-live="polite"></span></div>
+    </fieldset>
     <div class="actions"><button class="primary" value="close" data-i18n="close"></button></div>
   </form>
 </dialog>
@@ -173,10 +189,20 @@
   </form>
 </dialog>
 
+<!-- What's new -->
+<dialog id="whatsnew">
+  <form method="dialog">
+    <h2 id="whatsnew-title"></h2>
+    <ul id="whatsnew-list" class="whatsnew-list"></ul>
+    <div class="actions"><button class="primary" value="close" data-i18n="close"></button></div>
+  </form>
+</dialog>
+
 <div id="toast" class="toast" role="status" hidden></div>
 
 <script src="i18n.js"></script>
 <script src="glossary.js"></script>
+<script src="whatsnew.js"></script>
 <script src="advice.js"></script>
 <script src="app.js"></script>
 </body>

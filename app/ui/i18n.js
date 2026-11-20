@@ -116,7 +116,21 @@ window.I18N = {
     sfcOk: "Aucune corruption détectée.", sfcBad: "Windows a trouvé des fichiers système abîmés.",
     toolMissing: function (t) { return t + " n'est pas installé, cette partie n'a pas pu être lue."; },
     toolInstall: function (t) { return "Installer " + t + " (gratuit)"; },
-    toolConfirm: function (t) { return "Installer " + t + " avec winget (outil officiel de Windows) ? Une fenêtre s'ouvrira : suivez ses questions. Relancez ensuite un check approfondi."; }
+    toolConfirm: function (t) { return "Installer " + t + " avec winget (outil officiel de Windows) ? Une fenêtre s'ouvrira : suivez ses questions. Relancez ensuite un check approfondi."; },
+    updateAvailable: function (v) { return "Nouvelle version " + v + " disponible"; },
+    updateNotes: "Ce qui change",
+    updateNow: "Mettre à jour",
+    later: "Plus tard",
+    updatesTitle: "Mises à jour",
+    autoUpdate: "Vérifier automatiquement (une fois par jour, rien n'est envoyé)",
+    checkNow: "Vérifier maintenant",
+    checking: "Vérification…",
+    upToDate: "Vous avez la dernière version.",
+    updateFailed: "Mise à jour impossible : ",
+    updateManual: "Voulez-vous ouvrir la page de téléchargement pour la faire à la main ?",
+    whatsNewUpdated: function (v) { return "DesktopDiag est à jour (" + v + ") : quoi de neuf ?"; },
+    whatsNewTitle: function (v) { return "Quoi de neuf dans la version " + v; },
+    whatsNewNone: "Améliorations et corrections."
   },
   en: {
     settings: "Settings",
@@ -234,6 +248,20 @@ window.I18N = {
     sfcOk: "No corruption found.", sfcBad: "Windows found damaged system files.",
     toolMissing: function (t) { return t + " is not installed, this part could not be read."; },
     toolInstall: function (t) { return "Install " + t + " (free)"; },
-    toolConfirm: function (t) { return "Install " + t + " with winget (Windows' official tool)? A window will open: follow its questions. Then run a deep check again."; }
+    toolConfirm: function (t) { return "Install " + t + " with winget (Windows' official tool)? A window will open: follow its questions. Then run a deep check again."; },
+    updateAvailable: function (v) { return "New version " + v + " available"; },
+    updateNotes: "What changes",
+    updateNow: "Update",
+    later: "Later",
+    updatesTitle: "Updates",
+    autoUpdate: "Check automatically (once a day, nothing is sent)",
+    checkNow: "Check now",
+    checking: "Checking…",
+    upToDate: "You have the latest version.",
+    updateFailed: "Update failed: ",
+    updateManual: "Open the download page to do it by hand?",
+    whatsNewUpdated: function (v) { return "DesktopDiag is up to date (" + v + "): what's new?"; },
+    whatsNewTitle: function (v) { return "What's new in version " + v; },
+    whatsNewNone: "Improvements and fixes."
   }
 };

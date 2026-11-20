@@ -42,6 +42,8 @@
       if (msg.type === "compare") receive({ type: "compare", id: msg.id, data: { comparable: true, daysBetween: 7, volumes: [{ drive: "C:", freeGB: 40, deltaFreeGB: 22.4 }], stability: { newUnexpectedShutdowns: 0, newBugchecks: [] }, newGpuEvents: [], newDiskEvents: [], newHardwareErrors: [{ count: 2 }] } });
       if (msg.type === "copy") receive({ type: "copied", ok: true });
       if (msg.type === "pdf") receive({ type: "pdf", ok: true });
+      if (msg.type === "checkUpdate") receive({ type: "update", version: "0.2.0", notes: "- Exemple de note de version\n- Example release note" });
+      if (msg.type === "doUpdate") { var p = 0, iv = setInterval(function () { p += 20; receive({ type: "updateProgress", pct: p }); if (p >= 100) clearInterval(iv); }, 200); }
     }, 150);
   }
 
@@ -49,10 +51,34 @@
     switch (m.type) {
       case "init":
         state.version = m.version;
+        state.noUpdateCheck = !!(m.settings && m.settings.noUpdateCheck);
         applySettings(m.settings, false);
         state.history = m.history || [];
         renderHome();
         send({ type: "scores" });
+        if (m.whatsNew) showWhatsNew(true);
+        break;
+      case "update":
+        $("update-title").textContent = T().updateAvailable(m.version);
+        $("update-notes").textContent = m.notes || "";
+        $("update-notes-box").hidden = !m.notes;
+        $("update-progress").hidden = true;
+        $("btn-update").disabled = false;
+        $("update-banner").hidden = false;
+        $("update-status").textContent = T().updateAvailable(m.version);
+        break;
+      case "upToDate": $("update-status").textContent = T().upToDate; break;
+      case "updateProgress":
+        $("update-progress").hidden = false;
+        $("update-bar").style.width = m.pct + "%";
+        break;
+      case "updateFailed":
+        $("update-status").textContent = T().updateFailed + m.message;
+        if (m.install) {
+          $("btn-update").disabled = false;
+          $("update-progress").hidden = true;
+          if (confirm(T().updateFailed + m.message + "\n\n" + T().updateManual)) send({ type: "open", target: "releases" });
+        }
         break;
       case "scores":
         state.points = m.points || [];
@@ -691,18 +717,47 @@
   $("btn-settings").addEventListener("click", function () {
     dlg.querySelector('input[name=theme][value="' + state.theme + '"]').checked = true;
     dlg.querySelector('input[name=size][value="' + state.textSize + '"]').checked = true;
+    $("opt-autoupdate").checked = !state.noUpdateCheck;
     dlg.showModal();
   });
   dlg.addEventListener("change", function (e) {
+    if (e.target.id === "opt-autoupdate") {
+      state.noUpdateCheck = !e.target.checked;
+      send({ type: "saveSettings", noUpdateCheck: state.noUpdateCheck });
+      return;
+    }
     if (e.target.name === "theme") state.theme = e.target.value;
     if (e.target.name === "size") state.textSize = +e.target.value;
     applySettings(null, true);
   });
 
+  // ---- updates
+  $("btn-check-update").addEventListener("click", function () {
+    $("update-status").textContent = T().checking;
+    send({ type: "checkUpdate", force: true });
+  });
+  $("btn-update").addEventListener("click", function () {
+    this.disabled = true;
+    $("update-progress").hidden = false;
+    $("update-bar").style.width = "0%";
+    send({ type: "doUpdate" });
+  });
+  $("btn-update-later").addEventListener("click", function () { $("update-banner").hidden = true; });
+
+  var wn = $("whatsnew");
+  function showWhatsNew(afterUpdate) {
+    var entry = (window.WHATSNEW || {})[state.version];
+    var t = T();
+    $("whatsnew-title").textContent = afterUpdate ? t.whatsNewUpdated(state.version) : t.whatsNewTitle(state.version);
+    $("whatsnew-list").innerHTML = entry ? entry[state.lang].map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") : "<li>" + esc(t.whatsNewNone) + "</li>";
+    if (!wn.open) wn.showModal();
+  }
+  $("version").addEventListener("click", function () { showWhatsNew(false); });
+
   // Shortcuts: Enter = run (home), Ctrl+C = copy for a forum (results, nothing selected),
   // Ctrl+P = PDF (results), Escape = home.
   document.addEventListener("keydown", function (e) {
-    if (dlg.open || cmp.open) return;
+    if (dlg.open || cmp.open || wn.open) return;
     var onResults = !$("screen-results").hidden;
     if (e.key === "Enter" && !$("screen-home").hidden && document.activeElement === document.body) { startCheck(); return; }
     if (e.ctrlKey && (e.key === "c" || e.key === "C") && onResults && !String(window.getSelection())) { e.preventDefault(); copyForum(); return; }
