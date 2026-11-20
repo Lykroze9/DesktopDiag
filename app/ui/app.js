@@ -27,12 +27,13 @@
       { id: "maintenance", label: fr ? "Entretien" : "Maintenance", level: "yellow", findings: [{ id: "maint.reboot.pending", level: "yellow", text: fr ? "Redémarrage en attente" : "Restart pending" }] },
       { id: "battery", label: fr ? "Batterie" : "Battery", level: "skipped", findings: [] }
     ], facts: { crashes30d: 0, systemFreePct: 9, systemFreeGB: 40, wheaCorrected: 2 } };
-    var hist = [{ path: "demo2", name: "20261121-101500" }, { path: "demo1", name: "20261114-093000" }];
+    var hist = [{ path: "20261121-101500.json", name: "20261121-101500" }, { path: "20261114-093000.json", name: "20261114-093000" }];
     setTimeout(function () {
-      if (msg.type === "init") receive({ type: "init", version: "0.1.0", whatsNew: location.hash === "#updated", updatedAt: location.hash === "#updated" ? "2026-11-21T14:32:00" : null, updatedFrom: location.hash === "#updated" ? "0.0.9" : null, settings: { lang: state.lang, theme: state.theme, textSize: state.textSize }, history: hist });
+      if (msg.type === "init") receive({ type: "init", version: "1.0.0", whatsNew: location.hash === "#updated", updatedAt: location.hash === "#updated" ? "2026-11-21T14:32:00" : null, updatedFrom: location.hash === "#updated" ? "0.0.9" : null, settings: { lang: /-en/.test(location.hash) ? "en" : state.lang, theme: /-light/.test(location.hash) ? "light" : /-dark/.test(location.hash) ? "dark" : state.theme, textSize: state.textSize }, history: hist });
+      if (msg.type === "init" && /demo-results/.test(location.hash)) setTimeout(function () { $("btn-last").click(); }, 700);
       if (msg.type === "scores") receive({ type: "scores", points: [{ name: "20261101-120000", score: 46 }, { name: "20261107-120000", score: 58 }, { name: "20261114-093000", score: 66 }, { name: "20261121-101500", score: 74 }] });
-      if (msg.type === "runCheck") setTimeout(function () { receive({ type: "checkDone", path: "demo2" }); }, 3000);
-      if (msg.type === "score") receive({ type: "score", id: msg.id, path: msg.path, data: sample, admin: msg.path === "demo2" ? {
+      if (msg.type === "runCheck") setTimeout(function () { receive({ type: "checkDone", path: "20261121-101500.json" }); }, 3000);
+      if (msg.type === "score") receive({ type: "score", id: msg.id, path: msg.path, data: sample, admin: msg.path === "20261121-101500.json" ? {
         smart: { available: true, devices: [{ model: "Contoso NVMe 1TB", smartPassed: true, temperatureC: 41, powerOnHours: 9120, nvme: { percentageUsed: 7, availableSparePct: 100, mediaErrors: 0, dataWrittenTB: 38.2 } }] },
         reliability: [], volumeScan: [{ drive: "C:", result: "NoErrorsFound" }],
         dumpAnalysis: { available: true, results: [{ date: "2026-11-17T12:14:00", bugcheckName: "DPC_WATCHDOG_VIOLATION", imageName: "example.sys" }] },

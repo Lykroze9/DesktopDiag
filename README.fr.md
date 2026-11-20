@@ -19,6 +19,36 @@ infos, les explique simplement, donne une note à ton PC et te dit quoi faire. R
 
 [🇬🇧 English version](README.md)
 
+## Sans Claude : l'appli Windows
+
+Tu n'utilises pas Claude ? Télécharge **DesktopDiag.exe** : un seul fichier portable (environ 1 Mo),
+rien à installer.
+
+**[⬇️ Télécharger DesktopDiag.exe](https://github.com/Lykroze9/DesktopDiag/releases/latest/download/DesktopDiag.exe)** · [Notes de version et SHA-256](https://github.com/Lykroze9/DesktopDiag/releases/latest)
+
+<p>
+  <img src="docs/images/app-home-fr.png" width="49%" alt="Accueil de DesktopDiag : gros bouton Lancer le check, choix du symptôme, dernier check et courbe de la note">
+  <img src="docs/images/app-results-fr.png" width="49%" alt="Résultats de DesktopDiag : note 74/100, évolution depuis le dernier check, conseils étape par étape">
+</p>
+
+- **Un clic**, moins d'une minute : une note sur 100 et chaque domaine expliqué simplement
+  (OK / À voir / Urgent).
+- **Conseils en 3 parties** (ce que c'est, pourquoi c'est important, comment faire), un bouton
+  **Ouvrir pour moi** vers le bon écran de Windows, et **C'est fait**, vérifié au check suivant.
+- **Analyse approfondie** en option avec les droits admin : santé des SSD (SMART), analyse des
+  écrans bleus avec le pilote en cause probable, durée réelle du démarrage, vérification du disque.
+- Mode symptôme (« écran bleu », « PC lent »…), courbe de la note, comparaison de deux checks,
+  **PDF**, copie pour un forum, vue technicien, 4 thèmes, taille du texte, **français ou anglais**.
+- Mêmes contrôles et mêmes règles que le skill Claude. **Lecture seule**, pas de compte, pas de
+  télémétrie. Elle vérifie seulement une fois par jour s'il existe une nouvelle version sur GitHub
+  (désactivable) ; les mises à jour sont vérifiées par SHA-256.
+
+**Premier lancement :** l'appli n'est pas encore signée, donc Windows SmartScreen peut afficher
+*« Windows a protégé votre ordinateur »*. Clique sur **Informations complémentaires**, puis sur
+**Exécuter quand même**. Tu peux comparer le fichier avec le SHA-256 de la release, et tout le code
+est dans [`app/`](app/). Il faut Windows 10 22H2 ou 11 (x64) et le composant Microsoft Edge WebView2,
+déjà présent sur Windows 11 et sur les Windows 10 à jour.
+
 ## Ce qui est vérifié
 
 | Domaine | Détails |
@@ -101,6 +131,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\run-tests.ps1 -Live
 
 Les tests utilisent des relevés fictifs (`tests/fixtures.ps1`, aucune donnée d'un vrai PC) et tournent
 à chaque push avec GitHub Actions, avec PSScriptAnalyzer. Les nouveautés sont dans [CHANGELOG.md](CHANGELOG.md).
+
+L'appli Windows (`app/`) est en C# 5, compilée avec le compilateur du .NET Framework 4.8 déjà présent
+sur Windows, avec une interface HTML/CSS dans WebView2. Mets les trois fichiers du SDK WebView2
+(`Microsoft.Web.WebView2.Core.dll`, `Microsoft.Web.WebView2.WinForms.dll`, `WebView2Loader.dll` en x64,
+tirés du paquet NuGet `Microsoft.Web.WebView2` 1.0.4258.31) dans `app\lib`, puis lance `app\build.ps1`.
+Elle embarque les scripts et les règles du skill : l'appli et le skill partagent toujours les mêmes
+contrôles.
 
 ## Outils optionnels
 

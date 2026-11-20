@@ -203,7 +203,7 @@ window.I18N = {
     sinceTitleNone: "Follow-up of your actions",
     comparing: "Comparing…",
     scoreDelta: function (a, b) { return "Score: " + a + " → " + b + "/100"; },
-    spaceDelta: function (d, x) { return "Free space on " + d + ": " + x + " GB"; },
+    spaceDelta: function (d, x) { return "Free space on " + d + " " + x + " GB"; },
     newCrashes: function (n) { return n + " new crash(es)"; },
     newGpu: function (n) { return n + " new graphics driver error(s)"; },
     newDisk: function (n) { return n + " new disk error(s)"; },
