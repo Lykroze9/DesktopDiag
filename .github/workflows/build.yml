@@ -1,0 +1,47 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - name: Get the WebView2 SDK (NuGet)
+        shell: powershell
+        run: |
+          $v = '1.0.4258.31'
+          $pkg = Join-Path $env:RUNNER_TEMP 'wv2.zip'
+          Invoke-WebRequest "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/$v/microsoft.web.webview2.$v.nupkg" -OutFile $pkg -UseBasicParsing
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $z = [IO.Compression.ZipFile]::OpenRead($pkg)
+          New-Item -ItemType Directory -Force app\lib | Out-Null
+          foreach ($e in 'lib/net462/Microsoft.Web.WebView2.Core.dll', 'lib/net462/Microsoft.Web.WebView2.WinForms.dll', 'runtimes/win-x64/native/WebView2Loader.dll') {
+            [IO.Compression.ZipFileExtensions]::ExtractToFile($z.GetEntry($e), (Join-Path 'app\lib' (Split-Path $e -Leaf)), $true)
+          }
+          $z.Dispose()
+
+      - name: Build DesktopDiag.exe
+        shell: powershell
+        run: .\app\build.ps1
+
+      - name: Check the UI scripts
+        shell: pwsh
+        run: Get-ChildItem app\ui -Filter *.js | ForEach-Object { node --check $_.FullName; if ($LASTEXITCODE) { throw "syntax error in $($_.Name)" } }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DesktopDiag
+          path: |
+            app/bin/DesktopDiag.exe
+            app/bin/DesktopDiag.exe.sha256

@@ -69,8 +69,8 @@ Ce qui le rend différent :
   SMART, l'analyse des écrans bleus et un scan du système de fichiers en lecture seule ;
 - il est **en lecture seule** : il conseille, c'est toi qui décides ;
 - le même PC a toujours la même note : elle vient de règles écrites
-  ([rules.json](skills/desktopdiag/rules/rules.json), seuils dans
-  [rules/README.md](skills/desktopdiag/rules/README.md)) ;
+  ([rules.json](https://github.com/Lykroze9/DesktopDiag-Skill/blob/main/skills/desktopdiag/rules/rules.json), seuils dans
+  [rules/README.md](https://github.com/Lykroze9/DesktopDiag-Skill/blob/main/skills/desktopdiag/rules/README.md)) ;
 - il tourne avec ce que Windows 10 et 11 ont déjà (PowerShell 5.1, .NET Framework, WebView2).
 
 ## Outils optionnels
@@ -99,74 +99,25 @@ pièces) restent ta décision et ta responsabilité.
 ## Pour les utilisateurs de Claude Code : le skill
 
 DesktopDiag existe aussi en **skill pour [Claude Code](https://claude.com/claude-code)** : tu parles à
-Claude au lieu de cliquer. Il fait les mêmes contrôles avec les mêmes règles, et Claude ajoute des
-explications sur mesure, répond à tes questions et assure le suivi dans le temps.
+Claude au lieu de cliquer (« fais un check du PC », « écran noir en jeu »). Mêmes contrôles, mêmes
+règles, avec en plus des explications sur mesure, des réponses à tes questions et des checks de suivi
+programmés.
 
-**📂 [Voir le skill sur GitHub](skills/desktopdiag)** : [SKILL.md](skills/desktopdiag/SKILL.md) (les
-instructions suivies par Claude), [scripts](skills/desktopdiag/scripts), [règles](skills/desktopdiag/rules)
-et [références](skills/desktopdiag/references).
-
-### Installation
-
-Comme plugin Claude Code :
-
-```
-/plugin marketplace add Lykroze9/DesktopDiag
-/plugin install desktopdiag@desktopdiag
-```
-
-Ou comme skill seul : copie `skills/desktopdiag` dans `%USERPROFILE%\.claude\skills\desktopdiag`
-(tous les projets) ou dans `.claude\skills\desktopdiag` d'un projet.
-
-### Utilisation
-
-Parle simplement à Claude Code :
-
-- « Fais un check du PC » / « Mon PC va bien ? »
-- « J'ai des écrans noirs de quelques secondes en jeu »
-- « Mon PC a redémarré tout seul deux fois cette semaine »
-- « Mon SSD est en bon état ? »
-- « Fais un check complet » (propose l'analyse admin)
-- « Fais-moi un rapport partageable pour un forum »
-- « Programme un check tous les mois » / « Refais un check dans 4 jours »
-
-Ce que le skill ajoute :
-
-- **Suivi** : après chaque rapport, Claude propose le prochain check adapté à ce qu'il a trouvé (dans
-  2 à 4 jours après une correction, chaque semaine tant qu'un problème se stabilise, sinon chaque
-  mois) et le programme avec ton accord via les tâches planifiées locales de l'appli Claude.
-- **Corrections sur demande** : proposées avec un niveau de risque et lancées seulement après ton
-  accord explicite, une par une.
-- Les pièges rencontrés en vrai sont documentés (plantages comptés en double dans le journal
-  Application, `chkdsk` « Accès refusé », utilitaires constructeur qui réinstallent des pilotes,
-  écritures registre virtualisées...).
-
-Tu peux aussi lancer la collecte toi-même :
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File skills\desktopdiag\scripts\collect.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File skills\desktopdiag\scripts\compare.ps1
-```
-
-Ajoute `-Summary` à `collect.ps1` pour un résumé compact (environ 10 fois plus petit que le relevé
-complet). Claude l'utilise par défaut : chaque check consomme beaucoup moins de tokens.
-
+**📂 [DesktopDiag-Skill sur GitHub](https://github.com/Lykroze9/DesktopDiag-Skill)** (installation, utilisation, scripts et règles).
 ## Développement
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tests\run-tests.ps1 -Live
+git clone --recursive https://github.com/Lykroze9/DesktopDiag
 ```
 
-Les tests utilisent des relevés fictifs (`tests/fixtures.ps1`, aucune donnée d'un vrai PC) et tournent
-à chaque push avec GitHub Actions, avec PSScriptAnalyzer. Les nouveautés sont dans [CHANGELOG.md](CHANGELOG.md).
-
-L'appli Windows (`app/`) est en C# 5, compilée avec le compilateur du .NET Framework 4.8 déjà présent
-sur Windows, avec une interface HTML/CSS dans WebView2. Mets les trois fichiers du SDK WebView2
-(`Microsoft.Web.WebView2.Core.dll`, `Microsoft.Web.WebView2.WinForms.dll`, `WebView2Loader.dll` en x64,
-tirés du paquet NuGet `Microsoft.Web.WebView2` 1.0.4258.31) dans `app\lib`, puis lance `app\build.ps1`.
-Elle embarque les scripts PowerShell et les règles de `skills/desktopdiag` : l'appli et le skill
-partagent toujours les mêmes contrôles.
-
+L'appli est en C# 5, compilée avec le compilateur du .NET Framework 4.8 déjà présent sur Windows, avec
+une interface HTML/CSS dans WebView2. Les contrôles PowerShell et les règles viennent de
+[DesktopDiag-Skill](https://github.com/Lykroze9/DesktopDiag-Skill), inclus comme sous-module git
+`skill` (une seule source : l'appli et le skill font toujours les mêmes contrôles). Mets les trois
+fichiers du SDK WebView2 (`Microsoft.Web.WebView2.Core.dll`, `Microsoft.Web.WebView2.WinForms.dll`,
+`WebView2Loader.dll` en x64, tirés du paquet NuGet `Microsoft.Web.WebView2` 1.0.4258.31) dans `app\lib`,
+puis lance `app\build.ps1`. GitHub Actions compile l'appli à chaque push. Les nouveautés sont dans
+[CHANGELOG.md](CHANGELOG.md).
 ## Licence
 
 MIT

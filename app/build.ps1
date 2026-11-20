@@ -1,13 +1,14 @@
 # Builds app\bin\DesktopDiag.exe with the .NET Framework 4.8 compiler already on Windows (no SDK).
 # Embeds the WebView2 DLLs (app\lib, see README), the UI (app\ui) and the skill's scripts and rules
-# (single source: skills\desktopdiag). Writes DesktopDiag.exe.sha256 next to the exe.
+# (single source: the skill repo, as the 'skill' submodule). Writes DesktopDiag.exe.sha256 next to the exe.
 param([switch]$Run, [string]$Version, [string]$OutDir)
 $ErrorActionPreference = 'Stop'
 $app  = $PSScriptRoot
 if (-not $Version) { $Version = (Get-Content (Join-Path $app 'version.txt') -TotalCount 1).Trim() }
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Bad version '$Version' (expected X.Y.Z)" }
 $repo = Split-Path -Parent $app
-$skill = Join-Path $repo 'skills\desktopdiag'
+$skill = Join-Path $repo 'skill\skills\desktopdiag'   # git submodule: Lykroze9/DesktopDiag-Skill
+if (-not (Test-Path (Join-Path $skill 'scripts\collect.ps1'))) { throw 'Skill scripts missing: run  git submodule update --init' }
 $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $lib = Join-Path $app 'lib'
 $out = Join-Path $app 'bin'

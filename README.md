@@ -66,8 +66,8 @@ What makes it different:
   a read-only file system scan;
 - it is **read-only**: it gives advice, you decide what to do;
 - the same PC always gets the same score: the score comes from written rules
-  ([rules.json](skills/desktopdiag/rules/rules.json), thresholds in
-  [rules/README.md](skills/desktopdiag/rules/README.md));
+  ([rules.json](https://github.com/Lykroze9/DesktopDiag-Skill/blob/main/skills/desktopdiag/rules/rules.json), thresholds in
+  [rules/README.md](https://github.com/Lykroze9/DesktopDiag-Skill/blob/main/skills/desktopdiag/rules/README.md));
 - it runs on what Windows 10 and 11 already have (PowerShell 5.1, .NET Framework, WebView2).
 
 ## Optional tools
@@ -94,71 +94,23 @@ interventions (BIOS updates, repasting, part replacement) are your decision and 
 ## For Claude Code users: the skill
 
 DesktopDiag also exists as a **skill for [Claude Code](https://claude.com/claude-code)**: you talk to
-Claude instead of clicking. It runs the same checks with the same rules, and Claude adds tailored
-explanations, answers your questions and follows up over time.
+Claude instead of clicking ("check my PC", "my screen goes black in games"). Same checks, same rules,
+plus tailored explanations, answers to your questions and scheduled follow-up checks.
 
-**📂 [See the skill on GitHub](skills/desktopdiag)**: [SKILL.md](skills/desktopdiag/SKILL.md) (the
-instructions Claude follows), [scripts](skills/desktopdiag/scripts), [rules](skills/desktopdiag/rules)
-and [references](skills/desktopdiag/references).
-
-### Install
-
-As a Claude Code plugin:
-
-```
-/plugin marketplace add Lykroze9/DesktopDiag
-/plugin install desktopdiag@desktopdiag
-```
-
-Or as a standalone skill: copy `skills/desktopdiag` to `%USERPROFILE%\.claude\skills\desktopdiag`
-(all projects) or to `.claude\skills\desktopdiag` in a project.
-
-### Use
-
-Just talk to Claude Code:
-
-- "Check my PC" / "Is my PC healthy?"
-- "My screen goes black for a few seconds when I play"
-- "My PC rebooted by itself twice this week"
-- "Is my SSD OK?"
-- "Do a full check" (proposes the admin deep scan)
-- "Make a shareable report for a forum"
-- "Schedule a check every month" / "Check again in 4 days"
-
-What the skill adds:
-
-- **Follow-up**: after each report, Claude proposes the next check sized to what it found (in 2-4 days
-  after a fix, weekly while problems settle, monthly otherwise) and schedules it on your OK with the
-  Claude desktop app's local scheduled tasks.
-- **Fixes on request**: proposed with a risk level and run only after your explicit OK, one at a time.
-- Documented real-world traps (inflated crash counts in the Application log, `chkdsk` access denied,
-  vendor utilities reinstalling drivers, sandboxed registry writes...).
-
-You can also run the collector yourself:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File skills\desktopdiag\scripts\collect.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File skills\desktopdiag\scripts\compare.ps1
-```
-
-Add `-Summary` to `collect.ps1` for a compact digest (about 10x smaller than the full snapshot).
-Claude uses it by default, so each check costs far fewer tokens.
-
+**📂 [DesktopDiag-Skill on GitHub](https://github.com/Lykroze9/DesktopDiag-Skill)** (install, usage, scripts and rules).
 ## Development
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tests\run-tests.ps1 -Live
+git clone --recursive https://github.com/Lykroze9/DesktopDiag
 ```
 
-Tests use synthetic snapshots (`tests/fixtures.ps1`, no real machine data) and run on every push
-with GitHub Actions, together with PSScriptAnalyzer. See [CHANGELOG.md](CHANGELOG.md) for what changed.
-
-The Windows app (`app/`) is C# 5 compiled with the .NET Framework 4.8 compiler already on Windows,
-with an HTML/CSS interface in WebView2. Put the three WebView2 SDK files (`Microsoft.Web.WebView2.Core.dll`,
-`Microsoft.Web.WebView2.WinForms.dll`, `WebView2Loader.dll` for x64, from the NuGet package
-`Microsoft.Web.WebView2` 1.0.4258.31) in `app\lib`, then run `app\build.ps1`. It embeds the PowerShell
-scripts and rules from `skills/desktopdiag`, so the app and the skill always share the same checks.
-
+The app is C# 5 compiled with the .NET Framework 4.8 compiler already on Windows, with an HTML/CSS
+interface in WebView2. The PowerShell checks and rules come from
+[DesktopDiag-Skill](https://github.com/Lykroze9/DesktopDiag-Skill), included as the `skill` git
+submodule (single source: the app and the skill always run the same checks). Put the three WebView2 SDK
+files (`Microsoft.Web.WebView2.Core.dll`, `Microsoft.Web.WebView2.WinForms.dll`, `WebView2Loader.dll`
+for x64, from the NuGet package `Microsoft.Web.WebView2` 1.0.4258.31) in `app\lib`, then run
+`app\build.ps1`. GitHub Actions builds the app on every push. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 ## License
 
 MIT
