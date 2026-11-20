@@ -40,7 +40,12 @@ window.I18N = {
     summary: function (c) { return c.red + " urgent(s), " + c.yellow + " à voir, " + c.green + " OK"; },
     allGood: "Rien à signaler.",
     checkedOn: function (d) { return "Check du " + d; },
-    scoring: "Calcul de la note…"
+    scoring: "Calcul de la note…",
+    todo: "Que faire, dans l'ordre",
+    areasTitle: "Détail par domaine",
+    whatLabel: "Ce que c'est", whyLabel: "Pourquoi c'est important", howLabel: "Comment faire",
+    moreAdvice: function (n) { return "Voir " + n + " autre(s) conseil(s)"; },
+    openFailed: "Impossible d'ouvrir cet écran : "
   },
   en: {
     settings: "Settings",
@@ -82,6 +87,11 @@ window.I18N = {
     summary: function (c) { return c.red + " urgent, " + c.yellow + " to check, " + c.green + " OK"; },
     allGood: "Nothing to report.",
     checkedOn: function (d) { return "Check of " + d; },
-    scoring: "Computing the score…"
+    scoring: "Computing the score…",
+    todo: "What to do, in order",
+    areasTitle: "Details by area",
+    whatLabel: "What it is", whyLabel: "Why it matters", howLabel: "How to do it",
+    moreAdvice: function (n) { return "Show " + n + " more"; },
+    openFailed: "Could not open this screen: "
   }
 };

@@ -299,6 +299,48 @@ namespace DesktopDiag
                 case "saveSettings": SaveSettings(m); break;
                 case "runCheck": RunCheck(); break;
                 case "score": Score(Get(m, "path"), Get(m, "id")); break;
+                case "open": OpenTarget(Get(m, "target")); break;
+            }
+        }
+
+        // "Ouvrir pour moi": fixed list of Windows screens. They only open; nothing is changed.
+        static readonly Dictionary<string, string[]> OpenTargets = new Dictionary<string, string[]>
+        {
+            { "reliability",   new[] { "perfmon.exe", "/rel" } },
+            { "devmgmt",       new[] { "devmgmt.msc", "" } },
+            { "storage",       new[] { "ms-settings:storagesense", "" } },
+            { "cleanmgr",      new[] { "cleanmgr.exe", "" } },
+            { "apps",          new[] { "ms-settings:appsfeatures", "" } },
+            { "security",      new[] { "windowsdefender:", "" } },
+            { "firewall",      new[] { "windowsdefender://network", "" } },
+            { "windowsupdate", new[] { "ms-settings:windowsupdate", "" } },
+            { "uac",           new[] { "UserAccountControlSettings.exe", "" } },
+            { "taskmgr",       new[] { "taskmgr.exe", "" } },
+            { "startup",       new[] { "ms-settings:startupapps", "" } },
+            { "memdiag",       new[] { "mdsched.exe", "" } },
+            { "power",         new[] { "ms-settings:powersleep", "" } },
+            { "network",       new[] { "ms-settings:network-status", "" } },
+            { "wifi",          new[] { "ms-settings:network-wifi", "" } },
+            { "battery",       new[] { "ms-settings:batterysaver", "" } },
+            { "backup",        new[] { "ms-settings:backup", "" } }
+        };
+
+        void OpenTarget(string key)
+        {
+            string[] t;
+            if (key == null || !OpenTargets.TryGetValue(key, out t)) return;
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo(t[0], t[1]);
+                psi.UseShellExecute = true;
+                Process.Start(psi);
+            }
+            catch (Exception ex)
+            {
+                Dictionary<string, object> d = Msg("openFailed");
+                d["target"] = key;
+                d["message"] = ex.Message;
+                Send(d);
             }
         }
 

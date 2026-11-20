@@ -13,7 +13,8 @@
   function mock(msg) {
     var sample = { score: 74, counts: { red: 0, yellow: 3, green: 8 }, areas: [
       { id: "stability", label: state.lang === "fr" ? "Stabilité" : "Stability", level: "green", findings: [] },
-      { id: "storageSpace", label: state.lang === "fr" ? "Espace disque" : "Disk space", level: "yellow", findings: [{ level: "yellow", text: state.lang === "fr" ? "Peu d'espace sur le disque système : 40 Go libres (9 %)" : "Low space on the system disk: 40 GB free (9%)" }] },
+      { id: "maintenance", label: state.lang === "fr" ? "Entretien" : "Maintenance", level: "yellow", findings: [{ id: "maint.reboot.pending", level: "yellow", text: state.lang === "fr" ? "Redémarrage en attente" : "Restart pending" }] },
+      { id: "storageSpace", label: state.lang === "fr" ? "Espace disque" : "Disk space", level: "yellow", findings: [{ id: "space.system.low", level: "yellow", text: state.lang === "fr" ? "Peu d'espace sur le disque système : 40 Go libres (9 %)" : "Low space on the system disk: 40 GB free (9%)" }] },
       { id: "battery", label: state.lang === "fr" ? "Batterie" : "Battery", level: "skipped", findings: [] }
     ] };
     setTimeout(function () {
@@ -38,6 +39,9 @@
       case "score":
         if (m.id === "last") renderLast(m);
         else if (m.id === "result" + state.seq) { showResults(m); }
+        break;
+      case "openFailed":
+        alert(T().openFailed + m.message);
         break;
       case "error":
         if (m.id === "last") { $("last-card").hidden = true; break; }
@@ -162,8 +166,54 @@
         (f ? "<ul>" + f + "</ul>" : (a.level === "green" ? '<p class="muted">' + esc(t.allGood) + "</p>" : "")) +
         "</article>";
     }).join("");
+    renderAdvice(areas);
     show("results");
   }
+
+  // Recommendations: one per advice id, most severe finding first, 5 shown then "show more".
+  function renderAdvice(areas) {
+    var lib = window.ADVICE[state.lang], seen = {}, list = [];
+    var findings = [];
+    areas.forEach(function (a) { (a.findings || []).forEach(function (f) { findings.push(f); }); });
+    findings.sort(function (x, y) { return order[x.level] - order[y.level]; });
+    findings.forEach(function (f) {
+      var id = window.ADVICE_MAP[f.id];
+      if (id && !seen[id] && lib.items[id]) { seen[id] = true; list.push({ id: id, level: f.level, item: lib.items[id] }); }
+    });
+    $("advice-block").hidden = list.length === 0;
+    var t = T();
+    $("advice").innerHTML = list.map(function (x, i) {
+      var it = x.item;
+      var opens = (it.open || []).map(function (k) {
+        return '<button type="button" class="secondary small-btn" data-open="' + esc(k) + '">' + openIcon + esc(lib.open[k] || k) + "</button>";
+      }).join("");
+      return '<li class="card advice-item lvl-' + x.level + (i >= 5 ? " extra" : "") + '"' + (i >= 5 ? " hidden" : "") + '>' +
+        "<details><summary><span class=\"advice-n\">" + (i + 1) + "</span><span class=\"advice-title\">" + esc(it.title) + "</span>" +
+        '<span class="who who-' + it.who + '">' + esc(lib.who[it.who]) + "</span></summary>" +
+        '<div class="advice-body">' +
+        "<h4>" + esc(t.whatLabel) + "</h4><p>" + esc(it.what) + "</p>" +
+        "<h4>" + esc(t.whyLabel) + "</h4><p>" + esc(it.why) + "</p>" +
+        "<h4>" + esc(t.howLabel) + "</h4><ol>" + it.how.map(function (s) { return "<li>" + esc(s) + "</li>"; }).join("") + "</ol>" +
+        (opens ? '<div class="open-row">' + opens + "</div>" : "") +
+        "</div></details></li>";
+    }).join("");
+    var extra = list.length - 5;
+    var more = $("btn-more-advice");
+    more.hidden = extra <= 0;
+    if (extra > 0) {
+      more.textContent = t.moreAdvice(extra);
+      more.onclick = function () { document.querySelectorAll(".advice-item.extra").forEach(function (el) { el.hidden = false; }); more.hidden = true; };
+    }
+    var first = document.querySelector(".advice-item details");
+    if (first) first.open = true;
+  }
+
+  var openIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
+
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-open]");
+    if (b) send({ type: "open", target: b.dataset.open });
+  });
 
   function showError(msg) { $("error-detail").textContent = msg || ""; show("error"); }
 
