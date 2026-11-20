@@ -120,6 +120,7 @@
       case "copied": toast(m.ok ? T().copied : T().copyFailed); break;
       case "pdf": endPrint(); toast(m.ok ? T().pdfDone : T().pdfFailed + (m.message || "")); break;
       case "openFailed": toast(T().openFailed + m.message); break;
+      case "toolNoWinget": alert(T().toolNoWinget(m.tool)); break;
       case "error":
         if (m.id === "last") { $("last-card").hidden = true; break; }
         if (m.id === "tech") { $("tech-out").textContent = m.message; break; }

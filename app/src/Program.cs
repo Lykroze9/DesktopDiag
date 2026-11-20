@@ -675,13 +675,42 @@ namespace DesktopDiag
 
         // Optional free tools used by the admin step. Opens a console running winget so the user
         // sees and answers winget's own prompts. Only these two packages can be installed.
+        // winget is missing on some PCs (older Windows 10, Windows Sandbox): fall back to the official page.
+        static string FindWinget()
+        {
+            string p = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Microsoft\WindowsApps\winget.exe");
+            if (File.Exists(p)) return p;
+            foreach (string dir in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(';'))
+            {
+                try { string c = Path.Combine(dir.Trim(), "winget.exe"); if (dir.Trim().Length > 0 && File.Exists(c)) return c; }
+                catch { }
+            }
+            return null;
+        }
+
         void InstallTool(string tool)
         {
             string id = tool == "smartctl" ? "smartmontools.smartmontools" : tool == "windbg" ? "Microsoft.WinDbg" : null;
             if (id == null) return;
+            string page = tool == "smartctl" ? "https://www.smartmontools.org/wiki/Download" : "https://aka.ms/windbg/download";
+            string name = tool == "smartctl" ? "smartctl (smartmontools)" : "WinDbg";
+            bool fr = settings.lang == "fr";
             try
             {
-                ProcessStartInfo psi = new ProcessStartInfo("cmd.exe", "/k winget install --id " + id + " -e");
+                string winget = FindWinget();
+                if (winget == null)
+                {
+                    Process.Start(page);
+                    Dictionary<string, object> d = Msg("toolNoWinget");
+                    d["tool"] = name;
+                    Send(d);
+                    return;
+                }
+                // Visible console: says what it does, runs winget (its own prompts), then says what to do next.
+                string before = fr ? "Installation de " + name + " avec winget (outil officiel de Windows)..." : "Installing " + name + " with winget (Windows' official tool)...";
+                string after = fr ? "Termine. Fermez cette fenetre et relancez un check approfondi dans DesktopDiag." : "Done. Close this window and run a deep check again in DesktopDiag.";
+                string cmd = "/k title DesktopDiag - " + name + " & echo " + before + " & echo. & \"" + winget + "\" install --id " + id + " -e & echo. & echo " + after;
+                ProcessStartInfo psi = new ProcessStartInfo("cmd.exe", cmd);
                 psi.UseShellExecute = true;
                 Process.Start(psi);
             }
