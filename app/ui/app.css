@@ -99,6 +99,16 @@ button.big { font-size: 1.2rem; padding: 16px 44px; border-radius: 16px; margin-
 .progress { height: 8px; border-radius: 99px; background: var(--ring-bg); overflow: hidden; margin: 28px 0 14px; }
 .progress div { height: 100%; width: 0; background: var(--accent); border-radius: 99px; transition: width .3s linear; }
 
+/* running screen: centered in the window, progress ring that fills with the check */
+#screen-running { min-height: 100%; display: flex; align-items: center; justify-content: center; }
+.running { padding: 24px 0 !important; }
+.run-ring { position: relative; width: 132px; height: 132px; margin: 0 auto; }
+.run-ring svg { width: 100%; height: 100%; display: block; transform: rotate(-90deg); }
+.run-bg { fill: none; stroke: var(--ring-bg); stroke-width: 9; }
+.run-fg { fill: none; stroke: var(--accent); stroke-width: 9; stroke-linecap: round; transition: stroke-dashoffset .3s linear; }
+.run-pct { position: absolute; inset: 0; display: grid; place-items: center; font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 1.6rem; font-weight: 700; }
+.run-ring::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--accent); opacity: 0; animation: run-pulse 2.4s ease-out infinite; }
+@keyframes run-pulse { 0% { transform: scale(.92); opacity: .35; } 100% { transform: scale(1.12); opacity: 0; } }
 /* results */
 .results-head { display: flex; align-items: center; gap: 28px; padding: 24px 28px; }
 .results-head h2 { font-size: 1.5rem; }

@@ -82,10 +82,15 @@
   <!-- Running -->
   <section id="screen-running" class="screen" hidden>
     <div class="running">
-      <div class="spinner" aria-hidden="true"></div>
+      <div class="run-ring" id="run-ring" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <svg viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="run-bg" cx="60" cy="60" r="52"/>
+          <circle class="run-fg" id="run-arc" cx="60" cy="60" r="52" stroke-dasharray="326.7" stroke-dashoffset="326.7"/>
+        </svg>
+        <span class="run-pct" id="run-pct">0 %</span>
+      </div>
       <h2 data-i18n="running"></h2>
       <p class="sub" id="running-msg" aria-live="polite"></p>
-      <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"><div id="progress-bar"></div></div>
       <p class="muted small" data-i18n="runningNote"></p>
     </div>
   </section>

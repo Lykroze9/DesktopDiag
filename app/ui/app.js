@@ -699,13 +699,21 @@
     $(id).addEventListener("change", function () { $("deep-opts").hidden = !$("opt-admin").checked; saveOpts(); });
   });
 
+  // Progress ring of the running screen: the arc and the % follow the check.
+  var lastPct = 0, RUN_C = 2 * Math.PI * 52;
+  function setProgress(p) {
+    lastPct = Math.max(0, Math.min(100, p));
+    $("run-arc").style.strokeDashoffset = (RUN_C * (1 - lastPct / 100)).toFixed(1);
+    $("run-pct").textContent = Math.round(lastPct) + " %";
+    $("run-ring").setAttribute("aria-valuenow", Math.round(lastPct));
+  }
   function startCheck() {
     show("running");
     var t = T(), i = 0, j = 0, start = Date.now();
     var admin = $("opt-admin").checked;
     runPhase = "collect";
     $("running-msg").textContent = t.msgs[0];
-    $("progress-bar").style.width = "2%";
+    setProgress(2);
     clearInterval(timer);
     timer = setInterval(function () {
       var s = (Date.now() - start) / 1000, pct;
@@ -714,13 +722,13 @@
         pct = (admin ? 60 : 95) * (1 - Math.exp(-s / 22));
         if (Math.floor(s / 4) > i && i < T().msgs.length - 1) { i++; $("running-msg").textContent = T().msgs[i]; }
       } else if (runPhase === "ask") {
-        pct = parseFloat($("progress-bar").style.width) || 60;
+        pct = lastPct || 60;
       } else {
         var a = (Date.now() - phaseStart) / 1000;
         pct = 60 + 35 * (1 - Math.exp(-a / 90));
         if (Math.floor(a / 8) > j && j < T().adminMsgs.length - 1) { j++; $("running-msg").textContent = T().adminMsgs[j]; }
       }
-      $("progress-bar").style.width = pct.toFixed(1) + "%";
+      setProgress(pct);
       if ($("screen-running").hidden) clearInterval(timer);
     }, 250);
     send({ type: "runCheck", admin: admin, dumps: admin && $("opt-dumps").checked, sfc: admin && $("opt-sfc").checked });
