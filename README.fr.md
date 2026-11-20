@@ -35,7 +35,7 @@ installer, pas de compte.
   écrans bleus avec le pilote en cause probable, durée réelle du démarrage, vérification du disque.
 - Mode symptôme (« écran bleu », « PC lent »…), courbe de la note, comparaison de deux checks,
   **PDF**, copie pour un forum, vue technicien, 4 thèmes, taille du texte, **français ou anglais**.
-- **Lecture seule**, pas de compte, pas de télémétrie. Elle vérifie seulement une fois par jour s'il
+- **Lecture seule**, pas de compte, pas de télémétrie. Elle vérifie seulement au lancement s'il
   existe une nouvelle version sur GitHub (désactivable) ; les mises à jour sont vérifiées par SHA-256.
 
 **Premier lancement :** l'appli n'est pas encore signée, donc Windows SmartScreen peut afficher

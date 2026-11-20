@@ -31,7 +31,7 @@ $gen = Join-Path $env:TEMP ('DesktopDiag-Version-{0}.g.cs' -f $PID)
 [IO.File]::WriteAllText($gen, "namespace DesktopDiag { static class AppVersion { public const string Value = `"$Version`"; } }`r`n")
 $cscArgs = @('/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/codepage:65001',
     "/out:$exe", ('/win32manifest:' + (Join-Path $app 'app.manifest')), ('/win32icon:' + (Join-Path $app 'icon.ico')),
-    '/r:System.dll', '/r:System.Drawing.dll', '/r:System.Windows.Forms.dll', '/r:System.Web.Extensions.dll',
+    '/r:System.dll', '/r:System.Drawing.dll', '/r:System.Windows.Forms.dll', '/r:System.Web.Extensions.dll', '/r:System.Core.dll', ('/r:' + (Join-Path $env:WINDIR 'Microsoft.NET\assembly\GAC_MSIL\System.Management.Automation\v4.0_3.0.0.0__31bf3856ad364e35\System.Management.Automation.dll')),
     ('/r:' + (Join-Path $lib 'Microsoft.Web.WebView2.Core.dll')), ('/r:' + (Join-Path $lib 'Microsoft.Web.WebView2.WinForms.dll'))) +
     $res + (Get-ChildItem (Join-Path $app 'src') -Filter *.cs | ForEach-Object { $_.FullName }) + $gen
 & $csc @cscArgs

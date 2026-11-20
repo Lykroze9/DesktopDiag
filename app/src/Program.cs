@@ -17,7 +17,18 @@ using System.Text;
 using System.Threading;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
+using System.Management.Automation;
+using System.Management.Automation.Runspaces;
 using Microsoft.Win32;
+
+[assembly: System.Reflection.AssemblyTitle("DesktopDiag")]
+[assembly: System.Reflection.AssemblyDescription("DesktopDiag - read-only Windows PC health check")]
+[assembly: System.Reflection.AssemblyCompany("Lykroze")]
+[assembly: System.Reflection.AssemblyProduct("DesktopDiag")]
+[assembly: System.Reflection.AssemblyCopyright("Copyright (c) 2026 Lykroze - MIT License - github.com/Lykroze9/DesktopDiag")]
+[assembly: System.Reflection.AssemblyVersion(DesktopDiag.AppVersion.Value + ".0")]
+[assembly: System.Reflection.AssemblyFileVersion(DesktopDiag.AppVersion.Value + ".0")]
+[assembly: System.Reflection.AssemblyInformationalVersion(DesktopDiag.AppVersion.Value)]
 
 namespace DesktopDiag
 {
@@ -40,10 +51,27 @@ namespace DesktopDiag
                 MessageBox.Show("DesktopDiag could not prepare its files:\n" + ex.Message, "DesktopDiag", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
+            // Elevated instance started by the deep scan: no window, just collect-admin.ps1 in-process.
+            int ai = Array.IndexOf(args, "--admin-collect");
+            if (ai >= 0 && ai + 1 < args.Length) { Environment.Exit(AdminCollect(args[ai + 1], Array.IndexOf(args, "--dumps") >= 0, Array.IndexOf(args, "--sfc") >= 0)); return; }
             AppDomain.CurrentDomain.AssemblyResolve += ResolveFromBin;
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Run();
+        }
+
+        // Only writes a JSON file inside DesktopDiag's own history folder.
+        static int AdminCollect(string outFile, bool dumps, bool sfc)
+        {
+            try
+            {
+                string hist = Path.GetFullPath(Path.Combine(DataRoot, "history")) + Path.DirectorySeparatorChar;
+                string full = Path.GetFullPath(outFile);
+                if (!full.StartsWith(hist, StringComparison.OrdinalIgnoreCase) || !full.EndsWith("-admin.json", StringComparison.OrdinalIgnoreCase)) return 2;
+                Ps.Run("collect-admin.ps1", Ps.P("OutFile", full, "Dumps", dumps, "Sfc", sfc));
+                return File.Exists(full) ? 0 : 1;
+            }
+            catch { return 1; }
         }
 
         // Kept apart so the WebView2 types are only loaded after AssemblyResolve is hooked.
@@ -127,44 +155,58 @@ namespace DesktopDiag
         public static string ScriptsDir { get { return Path.Combine(Program.BaseDir, "scripts"); } }
         public static string HistoryDir { get { return Path.Combine(Program.DataRoot, "history"); } }
 
-        static string Q(string s) { return "'" + s.Replace("'", "''") + "'"; }
+        public static string RulesPath { get { return Path.Combine(Path.Combine(Program.BaseDir, "rules"), "rules.json"); } }
 
-        // Runs a bundled script and returns its stdout (UTF-8). Throws on failure.
-        public static string Run(string script, string args)
+        // The scripts run INSIDE this process, with the PowerShell engine that ships with Windows
+        // (System.Management.Automation). No powershell.exe, no hidden window, no execution policy
+        // change: the script text is passed as a script block, which the policy does not cover.
+        public static Runspace Open()
         {
-            string path = Path.Combine(ScriptsDir, script);
-            return RunCommand("& " + Q(path) + (string.IsNullOrEmpty(args) ? "" : " " + args));
+            Runspace rs = RunspaceFactory.CreateRunspace(InitialSessionState.CreateDefault());
+            rs.Open();
+            return rs;
         }
 
-        // Runs a PowerShell command (built only from fixed text and Q()-quoted paths).
-        // Passed with -EncodedCommand so quotes and $ need no escaping for the command line.
-        public static string RunCommand(string command)
+        // Runs one bundled script with named parameters (a bool true = switch) and returns its output.
+        public static string Invoke(Runspace rs, string script, IDictionary<string, object> parameters)
         {
-            string cmd = "$ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=[Text.Encoding]::UTF8; " + command;
-            ProcessStartInfo psi = new ProcessStartInfo("powershell.exe",
-                "-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand " + Convert.ToBase64String(Encoding.Unicode.GetBytes(cmd)));
-            psi.UseShellExecute = false;
-            psi.CreateNoWindow = true;
-            psi.RedirectStandardOutput = true;
-            psi.RedirectStandardError = true;
-            psi.StandardOutputEncoding = Encoding.UTF8;
-            psi.StandardErrorEncoding = Encoding.UTF8;
-            StringBuilder err = new StringBuilder();
-            using (Process p = new Process())
+            string text = File.ReadAllText(Path.Combine(ScriptsDir, script), Encoding.UTF8);
+            using (PowerShell ps = PowerShell.Create())
             {
-                p.StartInfo = psi;
-                p.ErrorDataReceived += delegate(object s, DataReceivedEventArgs e) { if (e.Data != null) err.AppendLine(e.Data); };
-                p.Start();
-                p.BeginErrorReadLine();
-                string output = p.StandardOutput.ReadToEnd();
-                p.WaitForExit();
-                if (p.ExitCode != 0 && output.Trim().Length == 0)
-                    throw new Exception("PowerShell failed (" + p.ExitCode + "): " + err.ToString().Trim());
-                return output;
+                ps.Runspace = rs;
+                ps.AddScript(text);
+                if (parameters != null)
+                {
+                    foreach (KeyValuePair<string, object> p in parameters)
+                    {
+                        if (p.Value is bool) { if ((bool)p.Value) ps.AddParameter(p.Key); }
+                        else if (p.Value != null) ps.AddParameter(p.Key, p.Value);
+                    }
+                }
+                StringBuilder sb = new StringBuilder();
+                foreach (PSObject o in ps.Invoke())
+                    if (o != null) sb.AppendLine(o.ToString());
+                if (sb.Length == 0 && ps.HadErrors)
+                {
+                    StringBuilder err = new StringBuilder();
+                    foreach (ErrorRecord e in ps.Streams.Error) err.AppendLine(e.ToString());
+                    throw new Exception(script + ": " + err.ToString().Trim());
+                }
+                return sb.ToString();
             }
         }
 
-        public static string Arg(string value) { return Q(value); }
+        public static string Run(string script, IDictionary<string, object> parameters)
+        {
+            using (Runspace rs = Open()) return Invoke(rs, script, parameters);
+        }
+
+        public static Dictionary<string, object> P(params object[] kv)
+        {
+            Dictionary<string, object> d = new Dictionary<string, object>();
+            for (int i = 0; i + 1 < kv.Length; i += 2) d[(string)kv[i]] = kv[i + 1];
+            return d;
+        }
 
         // Newest non-admin snapshot in the shared history (same folder as the skill).
         public static List<string> History()
@@ -346,18 +388,21 @@ namespace DesktopDiag
                     foreach (string f in hist) if (!cache.ContainsKey(Path.GetFileName(f))) missing.Add(f);
                     if (missing.Count > 0)
                     {
-                        // One PowerShell process for all missing snapshots: one JSON line each.
-                        StringBuilder list = new StringBuilder();
-                        foreach (string f in missing) { if (list.Length > 0) list.Append(","); list.Append(Ps.Arg(f)); }
-                        string script = Path.Combine(Ps.ScriptsDir, "score.ps1");
-                        string output = Ps.RunCommand("foreach ($p in @(" + list + ")) { try { $a = $p -replace '\\.json$','-admin.json'; " +
-                            "$x = @{ Path = $p }; if (Test-Path -LiteralPath $a) { $x.Admin = $a }; $j = & " + Ps.Arg(script) +
-                            " @x | Out-String; '{0}|{1}' -f (Split-Path $p -Leaf), ($j | ConvertFrom-Json).score } catch { } }");
-                        foreach (string line in output.Split('\n'))
+                        // One in-process engine for all missing snapshots.
+                        using (Runspace rs = Ps.Open())
                         {
-                            string[] parts = line.Trim().Split('|');
-                            int sc;
-                            if (parts.Length == 2 && int.TryParse(parts[1], out sc)) cache[parts[0]] = sc;
+                            foreach (string f in missing)
+                            {
+                                try
+                                {
+                                    string adminFile = AdminPathFor(f);
+                                    string raw = Ps.Invoke(rs, "score.ps1", Ps.P("Path", f, "RulesPath", Ps.RulesPath,
+                                        "Admin", File.Exists(adminFile) ? adminFile : null));
+                                    Dictionary<string, object> r = json.DeserializeObject(raw.Substring(raw.IndexOf('{'))) as Dictionary<string, object>;
+                                    if (r != null && r.ContainsKey("score")) cache[Path.GetFileName(f)] = Convert.ToInt32(r["score"]);
+                                }
+                                catch { }
+                            }
                         }
                         try { File.WriteAllText(cacheFile, json.Serialize(cache), new UTF8Encoding(false)); } catch { }
                     }
@@ -386,7 +431,7 @@ namespace DesktopDiag
                 try
                 {
                     if (!Ps.IsHistoryFile(current) || !Ps.IsHistoryFile(previous)) throw new Exception("Unknown snapshot.");
-                    string raw = Ps.Run("compare.ps1", "-Current " + Ps.Arg(current) + " -Previous " + Ps.Arg(previous)).Trim();
+                    string raw = Ps.Run("compare.ps1", Ps.P("Current", current, "Previous", previous)).Trim();
                     int start = raw.IndexOf('{');
                     if (start < 0) throw new Exception("compare.ps1: no result.");
                     raw = raw.Substring(start);
@@ -467,16 +512,10 @@ namespace DesktopDiag
         UpdateInfo pendingUpdate;
         int updating;
 
-        // Automatic check at most once a day (unless turned off); "force" = the "Vérifier maintenant" button.
+        // Automatic check at every launch (unless turned off); "force" = the "Vérifier maintenant" button.
         void CheckUpdate(bool force)
         {
-            if (!force)
-            {
-                if (settings.noUpdateCheck) return;
-                DateTime last;
-                if (DateTime.TryParse(settings.lastUpdateCheck, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out last) &&
-                    (DateTime.UtcNow - last).TotalHours < 24 && Environment.GetEnvironmentVariable("DESKTOPDIAG_UPDATE_API") == null) return;
-            }
+            if (!force && settings.noUpdateCheck) return;
             ThreadPool.QueueUserWorkItem(delegate
             {
                 try
@@ -616,7 +655,7 @@ namespace DesktopDiag
                 try
                 {
                     Stopwatch sw = Stopwatch.StartNew();
-                    string output = Ps.Run("collect.ps1", null);
+                    string output = Ps.Run("collect.ps1", null);   // in-process, no admin needed
                     string snap = null;
                     foreach (string line in output.Split('\n'))
                     {
@@ -648,20 +687,19 @@ namespace DesktopDiag
             return Path.Combine(Path.GetDirectoryName(snap), Path.GetFileNameWithoutExtension(snap) + "-admin.json");
         }
 
-        // Runs collect-admin.ps1 elevated (Windows shows its UAC prompt). Returns "ok", "declined" or "failed".
+        // Deep scan: the app asks Windows to start ITSELF as administrator (UAC prompt naming
+        // DesktopDiag); that instance shows no window, runs collect-admin.ps1 in-process and exits.
+        // Returns "ok", "declined" or "failed".
         string RunAdmin(string snap, bool dumps, bool sfc)
         {
             Send(Msg("adminStart"));
             string outFile = AdminPathFor(snap);
-            string script = Path.Combine(Ps.ScriptsDir, "collect-admin.ps1");
-            string args = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + script + "\" -OutFile \"" + outFile + "\"" +
-                (dumps ? " -Dumps" : "") + (sfc ? " -Sfc" : "");
+            string args = "--admin-collect \"" + outFile + "\"" + (dumps ? " --dumps" : "") + (sfc ? " --sfc" : "");
             try
             {
-                ProcessStartInfo psi = new ProcessStartInfo("powershell.exe", args);
+                ProcessStartInfo psi = new ProcessStartInfo(Application.ExecutablePath, args);
                 psi.UseShellExecute = true;
                 psi.Verb = "runas";
-                psi.WindowStyle = ProcessWindowStyle.Hidden;
                 using (Process p = Process.Start(psi))
                 {
                     Send(Msg("adminRunning"));
@@ -735,8 +773,8 @@ namespace DesktopDiag
                     if (path == null || !Ps.IsHistoryFile(path)) throw new Exception("Unknown snapshot.");
                     string adminFile = AdminPathFor(path);
                     bool hasAdmin = File.Exists(adminFile);
-                    string raw = Ps.Run("score.ps1", "-Path " + Ps.Arg(path) + (hasAdmin ? " -Admin " + Ps.Arg(adminFile) : "") +
-                        " -Lang " + lang + (full ? " -Full" : "")).Trim();
+                    string raw = Ps.Run("score.ps1", Ps.P("Path", path, "Admin", hasAdmin ? adminFile : null,
+                        "Lang", lang, "Full", full, "RulesPath", Ps.RulesPath)).Trim();
                     int start = raw.IndexOf('{');
                     if (start < 0) throw new Exception("score.ps1: no result.\n" + raw);
                     raw = raw.Substring(start);

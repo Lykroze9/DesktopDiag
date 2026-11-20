@@ -2,6 +2,17 @@
 
 All notable changes to DesktopDiag. Format: newest first. / Les nouveautés de DesktopDiag, les plus récentes en premier.
 
+## App 1.0.1 - 2026-11-20
+
+### Changed
+- The checks run inside the app (System.Management.Automation, the PowerShell engine that ships
+  with Windows) instead of `powershell.exe -ExecutionPolicy Bypass -EncodedCommand`. No execution
+  policy change anywhere; fixes a Windows Defender machine-learning false positive
+  (`Trojan:Win32/Sabsik.EN.B!ml`) seen on 1.0.
+- Deep scan: the app starts itself elevated (`--admin-collect`, UAC prompt in DesktopDiag's name)
+  and writes only to its own history folder.
+- Publisher details in the exe (company, product, version, copyright).
+- Update check at every launch (still optional).
 ## App 1.0.0 - 2026-11-20
 
 First release of the standalone Windows app (`app/`, tag `app-v1.0.0`), for people without Claude.

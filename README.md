@@ -33,7 +33,7 @@ One portable file (about 1 MB): download it, double-click it, done. Nothing to i
   culprit driver, real startup time, file system check.
 - Symptom mode ("blue screen", "slow PC"...), score history, compare two checks, **PDF**, copy for a
   forum, technician view, 4 themes, text size, **English or French**.
-- **Read-only**, no account, no telemetry. It only checks GitHub once a day for a new version (can be
+- **Read-only**, no account, no telemetry. It only checks GitHub for a new version at launch (can be
   turned off); updates are verified with SHA-256.
 
 **First launch:** the app is not code-signed yet, so Windows SmartScreen may say *"Windows protected
