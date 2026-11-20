@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DesktopDiag</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2.5"/><path d="M8 21h8M12 17v4"/><path class="pulse" d="M6 11h3l1.5-3 3 6 1.5-3h3"/></svg>
+    <span>DesktopDiag</span>
+  </div>
+  <div class="top-actions">
+    <div class="lang" role="group" aria-label="Langue / Language">
+      <button type="button" data-lang="fr">FR</button><button type="button" data-lang="en">EN</button>
+    </div>
+    <button type="button" class="icon-btn" id="btn-settings" data-i18n-aria="settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <!-- Home -->
+  <section id="screen-home" class="screen">
+    <div class="hero">
+      <h1 data-i18n="heroTitle"></h1>
+      <p class="sub" data-i18n="heroSub"></p>
+      <button type="button" class="primary big" id="btn-run" data-i18n="run"></button>
+    </div>
+
+    <div id="last-card" class="card last" hidden>
+      <div class="ring small" id="last-ring"></div>
+      <div class="last-text">
+        <div class="muted" data-i18n="lastCheck"></div>
+        <div class="last-date" id="last-date"></div>
+        <div class="last-status" id="last-status"></div>
+      </div>
+      <button type="button" class="secondary" id="btn-last" data-i18n="viewReport"></button>
+    </div>
+
+    <ol id="first-steps" class="steps" hidden>
+      <li><span class="step-n">1</span><div><strong data-i18n="step1"></strong><p data-i18n="step1d"></p></div></li>
+      <li><span class="step-n">2</span><div><strong data-i18n="step2"></strong><p data-i18n="step2d"></p></div></li>
+      <li><span class="step-n">3</span><div><strong data-i18n="step3"></strong><p data-i18n="step3d"></p></div></li>
+    </ol>
+  </section>
+
+  <!-- Running -->
+  <section id="screen-running" class="screen" hidden>
+    <div class="running">
+      <div class="spinner" aria-hidden="true"></div>
+      <h2 data-i18n="running"></h2>
+      <p class="sub" id="running-msg" aria-live="polite"></p>
+      <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"><div id="progress-bar"></div></div>
+      <p class="muted small" data-i18n="runningNote"></p>
+    </div>
+  </section>
+
+  <!-- Results -->
+  <section id="screen-results" class="screen" hidden>
+    <div class="results-head card">
+      <div class="ring big" id="result-ring"></div>
+      <div>
+        <h2 id="result-title"></h2>
+        <p class="sub" id="result-summary"></p>
+        <p class="muted small" id="result-date"></p>
+      </div>
+    </div>
+    <div class="areas" id="areas"></div>
+    <div class="actions">
+      <button type="button" class="secondary" id="btn-home" data-i18n="back"></button>
+      <button type="button" class="primary" id="btn-again" data-i18n="again"></button>
+    </div>
+  </section>
+
+  <!-- Error -->
+  <section id="screen-error" class="screen" hidden>
+    <div class="card error">
+      <h2 data-i18n="errorTitle"></h2>
+      <p data-i18n="errorText"></p>
+      <pre id="error-detail"></pre>
+      <button type="button" class="primary" id="btn-error-home" data-i18n="back"></button>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/></svg> <span data-i18n="privacy"></span></span>
+  <span id="version"></span>
+</footer>
+
+<!-- Settings -->
+<dialog id="settings">
+  <form method="dialog">
+    <h2 data-i18n="settings"></h2>
+    <fieldset>
+      <legend data-i18n="appearance"></legend>
+      <label><input type="radio" name="theme" value="system"> <span data-i18n="themeSystem"></span></label>
+      <label><input type="radio" name="theme" value="light"> <span data-i18n="themeLight"></span></label>
+      <label><input type="radio" name="theme" value="dark"> <span data-i18n="themeDark"></span></label>
+      <label><input type="radio" name="theme" value="contrast"> <span data-i18n="themeContrast"></span></label>
+    </fieldset>
+    <fieldset>
+      <legend data-i18n="textSize"></legend>
+      <label><input type="radio" name="size" value="100"> 100 %</label>
+      <label><input type="radio" name="size" value="125"> 125 %</label>
+      <label><input type="radio" name="size" value="150"> 150 %</label>
+    </fieldset>
+    <div class="actions"><button class="primary" value="close" data-i18n="close"></button></div>
+  </form>
+</dialog>
+
+<script src="i18n.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
