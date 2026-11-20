@@ -304,7 +304,8 @@ namespace DesktopDiag
             {
                 case "init": SendInit(); break;
                 case "saveSettings": SaveSettings(m); break;
-                case "runCheck": RunCheck(); break;
+                case "runCheck": RunCheck(Get(m, "admin") == "True", Get(m, "dumps") == "True", Get(m, "sfc") == "True"); break;
+                case "installTool": InstallTool(Get(m, "tool")); break;
                 case "score": Score(Get(m, "path"), Get(m, "id"), Get(m, "full") == "True"); break;
                 case "open": OpenTarget(Get(m, "target")); break;
                 case "scores": Scores(); break;
@@ -340,8 +341,9 @@ namespace DesktopDiag
                         StringBuilder list = new StringBuilder();
                         foreach (string f in missing) { if (list.Length > 0) list.Append(","); list.Append(Ps.Arg(f)); }
                         string script = Path.Combine(Ps.ScriptsDir, "score.ps1");
-                        string output = Ps.RunCommand("foreach ($p in @(" + list + ")) { try { $j = & " + Ps.Arg(script) +
-                            " -Path $p | Out-String; '{0}|{1}' -f (Split-Path $p -Leaf), ($j | ConvertFrom-Json).score } catch { } }");
+                        string output = Ps.RunCommand("foreach ($p in @(" + list + ")) { try { $a = $p -replace '\\.json$','-admin.json'; " +
+                            "$x = @{ Path = $p }; if (Test-Path -LiteralPath $a) { $x.Admin = $a }; $j = & " + Ps.Arg(script) +
+                            " @x | Out-String; '{0}|{1}' -f (Split-Path $p -Leaf), ($j | ConvertFrom-Json).score } catch { } }");
                         foreach (string line in output.Split('\n'))
                         {
                             string[] parts = line.Trim().Split('|');
@@ -503,7 +505,7 @@ namespace DesktopDiag
             if (dark != null) SetDarkTitleBar(dark == "True" || dark == "true");
         }
 
-        void RunCheck()
+        void RunCheck(bool admin, bool dumps, bool sfc)
         {
             if (Interlocked.Exchange(ref busy, 1) == 1) return;
             ThreadPool.QueueUserWorkItem(delegate
@@ -519,9 +521,11 @@ namespace DesktopDiag
                         if (l.EndsWith(".json", StringComparison.OrdinalIgnoreCase) && Ps.IsHistoryFile(l)) { snap = l; break; }
                     }
                     if (snap == null) throw new Exception("collect.ps1: no snapshot written.\n" + output.Trim());
+                    string adminState = admin ? RunAdmin(snap, dumps, sfc) : null;
                     Dictionary<string, object> d = Msg("checkDone");
                     d["path"] = snap;
                     d["seconds"] = Math.Round(sw.Elapsed.TotalSeconds);
+                    d["admin"] = adminState;
                     Send(d);
                 }
                 catch (Exception ex)
@@ -535,6 +539,59 @@ namespace DesktopDiag
             });
         }
 
+        // Admin snapshot next to the normal one: <name>-admin.json (same convention as the skill).
+        static string AdminPathFor(string snap)
+        {
+            return Path.Combine(Path.GetDirectoryName(snap), Path.GetFileNameWithoutExtension(snap) + "-admin.json");
+        }
+
+        // Runs collect-admin.ps1 elevated (Windows shows its UAC prompt). Returns "ok", "declined" or "failed".
+        string RunAdmin(string snap, bool dumps, bool sfc)
+        {
+            Send(Msg("adminStart"));
+            string outFile = AdminPathFor(snap);
+            string script = Path.Combine(Ps.ScriptsDir, "collect-admin.ps1");
+            string args = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + script + "\" -OutFile \"" + outFile + "\"" +
+                (dumps ? " -Dumps" : "") + (sfc ? " -Sfc" : "");
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo("powershell.exe", args);
+                psi.UseShellExecute = true;
+                psi.Verb = "runas";
+                psi.WindowStyle = ProcessWindowStyle.Hidden;
+                using (Process p = Process.Start(psi))
+                {
+                    Send(Msg("adminRunning"));
+                    p.WaitForExit();
+                }
+                return File.Exists(outFile) ? "ok" : "failed";
+            }
+            catch (System.ComponentModel.Win32Exception ex)
+            {
+                return ex.NativeErrorCode == 1223 ? "declined" : "failed"; // 1223 = the user said no
+            }
+        }
+
+        // Optional free tools used by the admin step. Opens a console running winget so the user
+        // sees and answers winget's own prompts. Only these two packages can be installed.
+        void InstallTool(string tool)
+        {
+            string id = tool == "smartctl" ? "smartmontools.smartmontools" : tool == "windbg" ? "Microsoft.WinDbg" : null;
+            if (id == null) return;
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo("cmd.exe", "/k winget install --id " + id + " -e");
+                psi.UseShellExecute = true;
+                Process.Start(psi);
+            }
+            catch (Exception ex)
+            {
+                Dictionary<string, object> d = Msg("openFailed");
+                d["message"] = ex.Message;
+                Send(d);
+            }
+        }
+
         // Scores a history snapshot with the skill's score.ps1 (rules.json) in the UI language.
         void Score(string path, string id, bool full)
         {
@@ -544,12 +601,27 @@ namespace DesktopDiag
                 try
                 {
                     if (path == null || !Ps.IsHistoryFile(path)) throw new Exception("Unknown snapshot.");
-                    string raw = Ps.Run("score.ps1", "-Path " + Ps.Arg(path) + " -Lang " + lang + (full ? " -Full" : "")).Trim();
+                    string adminFile = AdminPathFor(path);
+                    bool hasAdmin = File.Exists(adminFile);
+                    string raw = Ps.Run("score.ps1", "-Path " + Ps.Arg(path) + (hasAdmin ? " -Admin " + Ps.Arg(adminFile) : "") +
+                        " -Lang " + lang + (full ? " -Full" : "")).Trim();
                     int start = raw.IndexOf('{');
                     if (start < 0) throw new Exception("score.ps1: no result.\n" + raw);
                     raw = raw.Substring(start);
                     json.DeserializeObject(raw); // validates before passing it on untouched
-                    SendRaw("{\"type\":\"score\",\"id\":" + json.Serialize(id) + ",\"path\":" + json.Serialize(path) + ",\"data\":" + raw + "}");
+                    string adminRaw = "null";
+                    if (hasAdmin)
+                    {
+                        try
+                        {
+                            string a = File.ReadAllText(adminFile, Encoding.UTF8).Trim();
+                            json.DeserializeObject(a);
+                            adminRaw = a;
+                        }
+                        catch { }
+                    }
+                    SendRaw("{\"type\":\"score\",\"id\":" + json.Serialize(id) + ",\"path\":" + json.Serialize(path) +
+                        ",\"data\":" + raw + ",\"admin\":" + adminRaw + "}");
                 }
                 catch (Exception ex)
                 {

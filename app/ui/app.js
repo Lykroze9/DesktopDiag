@@ -32,7 +32,13 @@
       if (msg.type === "init") receive({ type: "init", version: "preview", settings: { lang: state.lang, theme: state.theme, textSize: state.textSize }, history: hist });
       if (msg.type === "scores") receive({ type: "scores", points: [{ name: "20261101-120000", score: 46 }, { name: "20261107-120000", score: 58 }, { name: "20261114-093000", score: 66 }, { name: "20261121-101500", score: 74 }] });
       if (msg.type === "runCheck") setTimeout(function () { receive({ type: "checkDone", path: "demo2" }); }, 3000);
-      if (msg.type === "score") receive({ type: "score", id: msg.id, path: msg.path, data: sample });
+      if (msg.type === "score") receive({ type: "score", id: msg.id, path: msg.path, data: sample, admin: msg.path === "demo2" ? {
+        smart: { available: true, devices: [{ model: "Contoso NVMe 1TB", smartPassed: true, temperatureC: 41, powerOnHours: 9120, nvme: { percentageUsed: 7, availableSparePct: 100, mediaErrors: 0, dataWrittenTB: 38.2 } }] },
+        reliability: [], volumeScan: [{ drive: "C:", result: "NoErrorsFound" }],
+        dumpAnalysis: { available: true, results: [{ date: "2026-11-17T12:14:00", bugcheckName: "DPC_WATCHDOG_VIOLATION", imageName: "example.sys" }] },
+        bootPerformance: { lastBootSec: 38.4, avgBootSec: 41.2, stale: false, slowdowns: [{ key: "101 Example Updater", count: 3, avgDelaySec: 4.1 }] }
+      } : null });
+      if (msg.type === "runCheck" && msg.admin) { setTimeout(function () { receive({ type: "adminStart" }); }, 1000); setTimeout(function () { receive({ type: "adminRunning" }); }, 1800); }
       if (msg.type === "compare") receive({ type: "compare", id: msg.id, data: { comparable: true, daysBetween: 7, volumes: [{ drive: "C:", freeGB: 40, deltaFreeGB: 22.4 }], stability: { newUnexpectedShutdowns: 0, newBugchecks: [] }, newGpuEvents: [], newDiskEvents: [], newHardwareErrors: [{ count: 2 }] } });
       if (msg.type === "copy") receive({ type: "copied", ok: true });
       if (msg.type === "pdf") receive({ type: "pdf", ok: true });
@@ -52,7 +58,16 @@
         state.points = m.points || [];
         renderCurve();
         break;
+      case "adminStart":
+        runPhase = "ask";
+        $("running-msg").textContent = T().adminAsk;
+        break;
+      case "adminRunning":
+        runPhase = "admin"; phaseStart = Date.now();
+        $("running-msg").textContent = T().adminMsgs[0];
+        break;
       case "checkDone":
+        adminStates[m.path] = m.admin || null;
         state.history = state.history.filter(function (h) { return h.path !== m.path; });
         state.history.unshift({ path: m.path, name: fileName(m.path) });
         state.resultSymptom = state.symptom;
@@ -201,7 +216,7 @@
     var d = m.data;
     $("last-ring").innerHTML = ringSvg(d.score, 64);
     $("last-status").textContent = titleFor(d);
-    $("btn-last").onclick = function () { state.seq++; state.resultSymptom = null; showResults({ path: m.path, data: d }); };
+    $("btn-last").onclick = function () { state.seq++; state.resultSymptom = null; showResults({ path: m.path, data: d, admin: m.admin }); };
   }
 
   // Score curve of the last checks (needs 2 points or more).
@@ -302,8 +317,104 @@
     }).join("");
     var adviceIds = renderAdvice(areas);
     startSince(m.path, adviceIds);
+    renderAdmin(m.admin, adminStates[m.path]);
     show("results");
   }
+
+  // ---- deep scan (admin) section
+  var adminStates = {}; // snapshot path -> "ok" | "declined" | "failed" (this session only)
+
+  function renderAdmin(a, st) {
+    var t = T(), out = [];
+    if (!a) {
+      $("admin-block").hidden = !(st === "declined" || st === "failed");
+      $("admin-out").innerHTML = '<div class="card admin-card"><p>' + esc(st === "declined" ? t.deepDeclined : t.deepFailed) + "</p></div>";
+      return;
+    }
+    $("admin-block").hidden = false;
+    var tool = function (name, key) {
+      return '<p class="muted">' + esc(t.toolMissing(name)) + '</p><button type="button" class="secondary small-btn" data-install="' + key + '">' +
+        esc(t.toolInstall(name)) + "</button>";
+    };
+    var card = function (title, body) { return '<div class="card admin-card"><h3>' + esc(title) + "</h3>" + body + "</div>"; };
+
+    // Disks: SMART when smartctl is there, Windows reliability counters otherwise.
+    var disks = "";
+    var sm = a.smart || {};
+    if (sm.available && sm.devices && sm.devices.length) {
+      disks = "<ul>" + sm.devices.map(function (d) {
+        var bits = [], nv = d.nvme || {};
+        bits.push(d.smartPassed === false ? '<span class="bad">' + esc(t.smartBad) + "</span>" : '<span class="good">' + esc(t.smartOk) + "</span>");
+        if (nv.percentageUsed != null) bits.push(esc(t.wear(nv.percentageUsed)));
+        if (nv.availableSparePct != null) bits.push(esc(t.spare(nv.availableSparePct)));
+        if (nv.mediaErrors) bits.push('<span class="bad">' + esc(t.mediaErrors(nv.mediaErrors)) + "</span>");
+        if (d.temperatureC != null) bits.push(esc(t.temp(d.temperatureC)));
+        if (nv.dataWrittenTB != null) bits.push(esc(t.written(fmtNum(nv.dataWrittenTB))));
+        if (d.powerOnHours != null) bits.push(esc(t.hours(d.powerOnHours)));
+        return "<li><strong>" + esc(d.model || d.device) + "</strong><br>" + gloss(bits.join(" · ")) + "</li>";
+      }).join("") + "</ul>";
+    } else {
+      var rel = a.reliability || [];
+      disks = rel.length ? "<ul>" + rel.map(function (r) {
+        var bits = [];
+        if (r.wearPct != null) bits.push(esc(t.wear(r.wearPct)));
+        if (r.temperatureC) bits.push(esc(t.temp(r.temperatureC)));
+        if (r.readUncorrected) bits.push('<span class="bad">' + esc(t.mediaErrors(r.readUncorrected)) + "</span>");
+        if (r.powerOnHours) bits.push(esc(t.hours(r.powerOnHours)));
+        return "<li><strong>" + esc(r.name) + "</strong>" + (bits.length ? "<br>" + bits.join(" · ") : "") + "</li>";
+      }).join("") + "</ul>" : "";
+      if (sm.available === false) disks += tool("smartctl", "smartctl");
+    }
+    out.push(card(t.disksTitle, disks));
+
+    // Blue screens (only when the option was on: the section exists then).
+    if (a.dumpAnalysis) {
+      var da = a.dumpAnalysis, body;
+      if (da.available === false) body = tool("WinDbg", "windbg");
+      else if (!da.results || !da.results.length) body = '<p class="muted">' + esc(t.noDumps) + "</p>";
+      else body = "<ul>" + da.results.map(function (r) {
+        var when = r.date ? new Date(r.date).toLocaleString(locale(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : r.file;
+        var who = r.imageName || r.moduleName;
+        return "<li><strong>" + esc(when) + "</strong> · " + esc(r.bugcheckName || r.bugcheckCode || "?") +
+          (who ? '<br><span class="bad">' + esc(t.culprit(who)) + "</span>" : "") + "</li>";
+      }).join("") + "</ul>";
+      out.push(card(t.dumpsTitle, body));
+    }
+
+    // Startup.
+    var bp = a.bootPerformance;
+    if (bp && bp.lastBootSec != null) {
+      var b = "<p>" + esc(t.bootLast(fmtNum(bp.lastBootSec), bp.avgBootSec != null ? fmtNum(bp.avgBootSec) : null)) + "</p>";
+      if (bp.stale) b += '<p class="muted small">' + esc(t.bootStale) + "</p>";
+      if (bp.slowdowns && bp.slowdowns.length) {
+        b += '<p class="small">' + esc(t.bootSlow) + "</p><ul>" + bp.slowdowns.slice(0, 4).map(function (s) {
+          return "<li>" + esc(String(s.key).replace(/^\d+\s+/, "")) + " · +" + esc(fmtNum(s.avgDelaySec)) + " s (×" + s.count + ")</li>";
+        }).join("") + "</ul>";
+      }
+      out.push(card(t.bootTitle, b));
+    }
+
+    // File system scan.
+    var vs = a.volumeScan || [];
+    if (vs.length) out.push(card(t.fsTitle, "<ul>" + vs.map(function (v) {
+      var ok = /NoErrorsFound/i.test(v.result);
+      return "<li><strong>" + esc(v.drive) + "</strong> " + (ok ? '<span class="good">' + esc(t.fsOk) + "</span>" : '<span class="bad">' + esc(t.fsBad) + "</span> <code>" + esc(v.result) + "</code>") + "</li>";
+    }).join("") + "</ul>"));
+
+    // System files.
+    if (a.sfc) {
+      var bad = a.sfc.exitCode !== 0 || (a.sfc.lastLines || []).join(" ").match(/corrupt|endommag|violation/i);
+      out.push(card(t.sfcTitle, "<p class=\"" + (bad ? "bad" : "good") + "\">" + esc(bad ? t.sfcBad : t.sfcOk) + "</p>"));
+    }
+    $("admin-out").innerHTML = out.join("");
+  }
+
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-install]");
+    if (!b) return;
+    var name = b.dataset.install === "smartctl" ? "smartctl" : "WinDbg";
+    if (confirm(T().toolConfirm(name))) send({ type: "installTool", tool: b.dataset.install });
+  });
 
   // ---- recommendations + "C'est fait"
   function loadDone() { try { return JSON.parse(localStorage.getItem("dd.done") || "{}"); } catch (e) { return {}; } }
@@ -518,20 +629,47 @@
   function showError(msg) { $("error-detail").textContent = msg || ""; show("error"); }
 
   // ---------------------------------------------------------------- running
-  var timer = null;
+  var timer = null, runPhase = "collect", phaseStart = 0;
+  function loadOpts() { try { return JSON.parse(localStorage.getItem("dd.deep") || "{}"); } catch (e) { return {}; } }
+  function saveOpts() {
+    try { localStorage.setItem("dd.deep", JSON.stringify({ admin: $("opt-admin").checked, dumps: $("opt-dumps").checked, sfc: $("opt-sfc").checked })); } catch (e) { }
+  }
+  (function () {
+    var o = loadOpts();
+    if (o.admin) $("opt-admin").checked = true;
+    if (o.dumps === false) $("opt-dumps").checked = false;
+    if (o.sfc) $("opt-sfc").checked = true;
+    $("deep-opts").hidden = !$("opt-admin").checked;
+  })();
+  ["opt-admin", "opt-dumps", "opt-sfc"].forEach(function (id) {
+    $(id).addEventListener("change", function () { $("deep-opts").hidden = !$("opt-admin").checked; saveOpts(); });
+  });
+
   function startCheck() {
     show("running");
-    var t = T(), i = 0, start = Date.now();
+    var t = T(), i = 0, j = 0, start = Date.now();
+    var admin = $("opt-admin").checked;
+    runPhase = "collect";
     $("running-msg").textContent = t.msgs[0];
     $("progress-bar").style.width = "2%";
     clearInterval(timer);
     timer = setInterval(function () {
-      var s = (Date.now() - start) / 1000;
-      $("progress-bar").style.width = Math.min(95, 100 * (1 - Math.exp(-s / 22))).toFixed(1) + "%";
-      if (Math.floor(s / 4) > i && i < T().msgs.length - 1) { i++; $("running-msg").textContent = T().msgs[i]; }
+      var s = (Date.now() - start) / 1000, pct;
+      if (runPhase === "collect") {
+        // Eases towards 95 % (60 % with the deep scan) over about a minute.
+        pct = (admin ? 60 : 95) * (1 - Math.exp(-s / 22));
+        if (Math.floor(s / 4) > i && i < T().msgs.length - 1) { i++; $("running-msg").textContent = T().msgs[i]; }
+      } else if (runPhase === "ask") {
+        pct = parseFloat($("progress-bar").style.width) || 60;
+      } else {
+        var a = (Date.now() - phaseStart) / 1000;
+        pct = 60 + 35 * (1 - Math.exp(-a / 90));
+        if (Math.floor(a / 8) > j && j < T().adminMsgs.length - 1) { j++; $("running-msg").textContent = T().adminMsgs[j]; }
+      }
+      $("progress-bar").style.width = pct.toFixed(1) + "%";
       if ($("screen-running").hidden) clearInterval(timer);
     }, 250);
-    send({ type: "runCheck" });
+    send({ type: "runCheck", admin: admin, dumps: admin && $("opt-dumps").checked, sfc: admin && $("opt-sfc").checked });
   }
 
   // ---------------------------------------------------------------- events

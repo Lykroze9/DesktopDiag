@@ -29,6 +29,14 @@
       <h1 data-i18n="heroTitle"></h1>
       <p class="sub" data-i18n="heroSub"></p>
       <button type="button" class="primary big" id="btn-run" data-i18n="run"></button>
+      <div class="deep">
+        <label class="check"><input type="checkbox" id="opt-admin"> <span data-i18n="deepLabel"></span><span class="admin-tag" data-i18n="adminTag"></span></label>
+        <div id="deep-opts" class="deep-opts" hidden>
+          <p class="muted small" data-i18n="deepNote"></p>
+          <label class="check small"><input type="checkbox" id="opt-dumps" checked> <span data-i18n="optDumps"></span></label>
+          <label class="check small"><input type="checkbox" id="opt-sfc"> <span data-i18n="optSfc"></span></label>
+        </div>
+      </div>
       <p class="muted small symptom-label" data-i18n="symptomAsk"></p>
       <div class="chips" id="symptoms" role="group"></div>
     </div>
@@ -100,6 +108,10 @@
     </div>
     <h2 class="section-title" data-i18n="areasTitle"></h2>
     <div class="areas" id="areas"></div>
+    <div id="admin-block" hidden>
+      <h2 class="section-title" data-i18n="deepTitle"></h2>
+      <div id="admin-out" class="admin-grid"></div>
+    </div>
     <div id="tech-block" class="card tech-card" hidden>
       <h2 class="section-title" data-i18n="techTitle"></h2>
       <div id="tech-out"></div>
