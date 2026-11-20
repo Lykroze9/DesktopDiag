@@ -3,11 +3,13 @@
 window.WHATSNEW = {
   "1.0.1": {
     date: "2026-11-20",
-    fr: ["Plus aucun passage par PowerShell en mode « Bypass » : les contrôles tournent dans l'appli elle-même. Les antivirus devraient beaucoup moins la confondre avec un logiciel malveillant.",
+    fr: ["Nouveau : « Ce qu'on a trouvé chez vous » montre précisément ce qui cloche (dates des plantages, pilote en cause et quoi faire, disque concerné, programmes…).",
+      "Plus aucun passage par PowerShell en mode « Bypass » : les contrôles tournent dans l'appli elle-même. Les antivirus devraient beaucoup moins la confondre avec un logiciel malveillant.",
       "L'analyse approfondie demande l'autorisation administrateur au nom de DesktopDiag.",
       "Informations sur l'éditeur ajoutées au fichier (Lykroze, version, licence).",
       "Les mises à jour sont vérifiées à chaque lancement (désactivable dans les réglages)."],
-    en: ["No more PowerShell in \"Bypass\" mode: the checks run inside the app itself. Antivirus software should be far less likely to mistake it for malware.",
+    en: ["New: \"What we found on your PC\" shows exactly what is wrong (crash dates, the culprit driver and what to do, which disk, which programs…).",
+      "No more PowerShell in \"Bypass\" mode: the checks run inside the app itself. Antivirus software should be far less likely to mistake it for malware.",
       "The deep scan asks for administrator permission in DesktopDiag's name.",
       "Publisher details added to the file (Lykroze, version, license).",
       "Updates are checked at every launch (can be turned off in settings)."]
