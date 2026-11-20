@@ -102,6 +102,10 @@ DesktopDiag existe aussi en **skill pour [Claude Code](https://claude.com/claude
 Claude au lieu de cliquer. Il fait les mêmes contrôles avec les mêmes règles, et Claude ajoute des
 explications sur mesure, répond à tes questions et assure le suivi dans le temps.
 
+**📂 [Voir le skill sur GitHub](skills/desktopdiag)** : [SKILL.md](skills/desktopdiag/SKILL.md) (les
+instructions suivies par Claude), [scripts](skills/desktopdiag/scripts), [règles](skills/desktopdiag/rules)
+et [références](skills/desktopdiag/references).
+
 ### Installation
 
 Comme plugin Claude Code :
