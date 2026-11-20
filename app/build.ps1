@@ -23,6 +23,7 @@ foreach ($s in 'collect.ps1', 'collect-admin.ps1', 'compare.ps1', 'score.ps1', '
     $res += '/resource:{0},scripts/{1}' -f (Join-Path $skill "scripts\$s"), $s
 }
 $res += '/resource:{0},rules/rules.json' -f (Join-Path $skill 'rules\rules.json')
+$res += '/resource:{0},rules/knowledge.json' -f (Join-Path $skill 'rules\knowledge.json')
 
 if ($OutDir) { $out = $OutDir }
 New-Item -ItemType Directory -Force $out | Out-Null

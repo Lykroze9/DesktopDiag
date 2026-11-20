@@ -22,8 +22,8 @@
     var fr = state.lang === "fr";
     var sample = { score: 74, counts: { red: 0, yellow: 3, green: 8 }, areas: [
       { id: "stability", label: fr ? "Stabilité" : "Stability", level: "green", findings: [] },
-      { id: "storageSpace", label: fr ? "Espace disque" : "Disk space", level: "yellow", findings: [{ id: "space.system.low", level: "yellow", text: fr ? "Peu d'espace sur le disque système : 40 Go libres (9 %)" : "Low space on the system disk: 40 GB free (9%)" }] },
-      { id: "hardwareErrors", label: fr ? "Matériel" : "Hardware", level: "yellow", findings: [{ id: "whea.some", level: "yellow", text: fr ? "2 erreur(s) matérielle(s) corrigée(s) (WHEA)" : "2 corrected hardware error(s) (WHEA)" }] },
+      { id: "storageSpace", label: fr ? "Espace disque" : "Disk space", level: "yellow", findings: [{ id: "space.system.low", level: "yellow", text: fr ? "Peu d'espace sur le disque système : 40 Go libres (9 %)" : "Low space on the system disk: 40 GB free (9%)" }], details: fr ? ["Disque C: : 40 Go libres sur 465 Go (9 %)", "Fichiers temporaires : 3,2 Go"] : ["Drive C: 40 GB free of 465 GB (9%)", "Temporary files: 3.2 GB"] },
+      { id: "hardwareErrors", label: fr ? "Matériel" : "Hardware", level: "yellow", findings: [{ id: "whea.some", level: "yellow", text: fr ? "2 erreur(s) matérielle(s) corrigée(s) (WHEA)" : "2 corrected hardware error(s) (WHEA)" }], details: fr ? ["2 erreur(s) matérielle(s) #19, dernière le 18/11/2026 21:04"] : ["2 hardware error(s) #19, last on 2026-11-18 21:04"], culprits: [{ file: "example.sys", product: fr ? "Logiciel d'exemple" : "Example software", advice: fr ? "Mettez-le à jour ou désinstallez-le." : "Update or uninstall it." }] },
       { id: "maintenance", label: fr ? "Entretien" : "Maintenance", level: "yellow", findings: [{ id: "maint.reboot.pending", level: "yellow", text: fr ? "Redémarrage en attente" : "Restart pending" }] },
       { id: "battery", label: fr ? "Batterie" : "Battery", level: "skipped", findings: [] }
     ], facts: { crashes30d: 0, systemFreePct: 9, systemFreeGB: 40, wheaCorrected: 2 } };
@@ -354,7 +354,7 @@
       return '<article class="card area lvl-' + a.level + focus + '">' +
         '<div class="area-head"><h3>' + esc(a.label) + "</h3>" +
         '<span class="badge lvl-' + a.level + '">' + icons[a.level] + esc(t.level[a.level]) + "</span></div>" +
-        (f ? "<ul>" + f + "</ul>" : (a.level === "green" ? '<p class="muted">' + esc(t.allGood) + "</p>" : "")) +
+        (f ? "<ul>" + f + "</ul>" : (a.level === "green" ? '<p class="muted">' + esc(t.allGood) + "</p>" : "")) + detailsHtml(a) +
         "</article>";
     }).join("");
     var adviceIds = renderAdvice(areas);
@@ -474,6 +474,24 @@
   function loadDone() { try { return JSON.parse(localStorage.getItem("dd.done") || "{}"); } catch (e) { return {}; } }
   function saveDone(d) { try { localStorage.setItem("dd.done", JSON.stringify(d)); } catch (e) { } }
 
+  // "Ce qu'on a trouvé chez vous": the concrete evidence score.ps1 found for an area.
+  function detailsHtml(a) {
+    if (!a || a.level === "green" || a.level === "skipped" || !(a.details || []).length) return "";
+    return '<div class="found"><h4>' + esc(T().foundTitle) + "</h4><ul>" +
+      a.details.map(function (d) { return '<li class="' + (/^↳/.test(d) ? "culprit" : "") + '">' + gloss(esc(d)) + "</li>"; }).join("") + "</ul></div>";
+  }
+  // Same evidence inside a recommendation, with the culprit software's own fix first.
+  function atHomeHtml(a) {
+    if (!a) return "";
+    var c = (a.culprits || []).map(function (x) {
+      return '<li><strong>' + esc(x.product) + "</strong> (" + esc(x.file) + ") : " + gloss(esc(x.advice)) + "</li>";
+    }).join("");
+    var d = (a.details || []).filter(function (x) { return !/^↳/.test(x); }).slice(0, 4).map(function (x) { return "<li>" + gloss(esc(x)) + "</li>"; }).join("");
+    if (!c && !d) return "";
+    return '<div class="found at-home"><h4>' + esc(T().foundTitle) + "</h4>" +
+      (c ? '<p class="culprit-lead">' + esc(T().culpritLead) + '</p><ul class="culprit-list">' + c + "</ul>" : "") +
+      (d ? "<ul>" + d + "</ul>" : "") + "</div>";
+  }
   function renderAdvice(areas) {
     var lib = window.ADVICE[state.lang], seen = {}, list = [], t = T();
     var findings = [];
@@ -481,7 +499,7 @@
     findings.sort(function (x, y) { return (order[x.f.level] - order[y.f.level]) || (x.ai - y.ai); });
     findings.forEach(function (o) {
       var id = window.ADVICE_MAP[o.f.id];
-      if (id && !seen[id] && lib.items[id]) { seen[id] = true; list.push({ id: id, level: o.f.level, item: lib.items[id] }); }
+      if (id && !seen[id] && lib.items[id]) { seen[id] = true; list.push({ id: id, level: o.f.level, item: lib.items[id], area: areas[o.ai] }); }
     });
     var done = loadDone(), curName = fileName(state.current.path);
     $("advice-block").hidden = list.length === 0;
@@ -498,7 +516,7 @@
         '<span class="who who-' + it.who + '">' + esc(lib.who[it.who]) + "</span></summary>" +
         '<div class="advice-body">' +
         (stillThere ? '<p class="still">' + esc(t.stillThere) + "</p>" : "") +
-        "<h4>" + esc(t.whatLabel) + "</h4><p>" + gloss(esc(it.what)) + "</p>" +
+        "<h4>" + esc(t.whatLabel) + "</h4><p>" + gloss(esc(it.what)) + "</p>" + atHomeHtml(x.area) +
         "<h4>" + esc(t.whyLabel) + "</h4><p>" + gloss(esc(it.why)) + "</p>" +
         "<h4>" + esc(t.howLabel) + "</h4><ol>" + it.how.map(function (s) { return "<li>" + gloss(esc(s)) + "</li>"; }).join("") + "</ol>" +
         '<div class="open-row">' + opens +
