@@ -28,9 +28,9 @@
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; }
+html, body { margin: 0; height: 100%; }
 body {
-  background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column;
+  background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden;
   font: 1rem/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
 }
 h1, h2, h3 { font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; margin: 0; line-height: 1.25; }
@@ -54,7 +54,9 @@ svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; 
 .icon-btn:hover { background: var(--grey-soft); color: var(--text); }
 .icon-btn svg { width: 20px; height: 20px; }
 
-main { flex: 1; width: 100%; max-width: 920px; margin: 0 auto; padding: 32px 24px; }
+/* Header and footer stay put; only main scrolls. Side padding keeps the content 920px wide. */
+.topbar, .footer { flex: none; }
+main { flex: 1; min-height: 0; overflow-y: auto; width: 100%; padding: 32px max(24px, calc((100% - 920px) / 2)); }
 
 /* buttons */
 button.primary, button.secondary { font: inherit; font-weight: 600; border-radius: 12px; padding: 10px 20px; cursor: pointer; border: var(--border-w) solid transparent; }
@@ -242,7 +244,8 @@ select { font: inherit; font-weight: 400; padding: 8px 10px; border-radius: 10px
 .cmp-out { margin-top: 14px; min-height: 1.5em; }
 .cmp-out p { margin: 0 0 6px; }
 #compare-dlg { width: min(480px, 92vw); }
-.toast { position: fixed; left: 50%; bottom: 56px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 12px; font-size: .92rem; box-shadow: 0 8px 24px rgba(0,0,0,.25); z-index: 20; max-width: 90vw; }
+.toast-action { margin-left: 12px; font: inherit; font-weight: 700; color: var(--bg); background: transparent; border: 1px solid currentColor; border-radius: 8px; padding: 3px 10px; cursor: pointer; }
+.toast { display: flex; align-items: center; position: fixed; left: 50%; bottom: 56px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 12px; font-size: .92rem; box-shadow: 0 8px 24px rgba(0,0,0,.25); z-index: 20; max-width: 90vw; }
 
 /* PDF / print: light colors, everything unfolded, no buttons */
 @media print {
@@ -251,7 +254,8 @@ select { font: inherit; font-weight: 400; padding: 8px 10px; border-radius: 10px
     --green: #15803d; --green-soft: #dcfce7; --yellow: #b45309; --yellow-soft: #fef3c7; --red: #b91c1c; --red-soft: #fee2e2; --shadow: none;
   }
   .topbar .top-actions, .footer, .no-print, .open-row, #btn-more-advice, .toast { display: none !important; }
-  main { max-width: none; padding: 0; }
+  html, body { height: auto; overflow: visible; }
+  main { overflow: visible; padding: 0; }
   .advice-item summary::after { display: none; }
   .card, .advice-item, .area { break-inside: avoid; }
   .ring-fg { animation: none; }

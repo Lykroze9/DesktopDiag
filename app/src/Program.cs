@@ -458,7 +458,8 @@ namespace DesktopDiag
             { "wifi",          new[] { "ms-settings:network-wifi", "" } },
             { "battery",       new[] { "ms-settings:batterysaver", "" } },
             { "backup",        new[] { "ms-settings:backup", "" } },
-            { "releases",      new[] { Updater.Page, "" } }
+            { "releases",      new[] { Updater.Page, "" } },
+            { "help",          new[] { "https://github.com/Lykroze9/DesktopDiag/discussions", "" } }
         };
 
         // ---------------------------------------------------------- updates

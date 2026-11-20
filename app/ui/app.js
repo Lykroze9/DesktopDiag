@@ -118,7 +118,7 @@
         if (m.id === "since") $("since-block").hidden = true;
         else $("cmp-out").textContent = m.message;
         break;
-      case "copied": toast(m.ok ? T().copied : T().copyFailed); break;
+      case "copied": if (m.ok) toast(T().copied, T().askHelp, function () { send({ type: "open", target: "help" }); }); else toast(T().copyFailed); break;
       case "pdf": endPrint(); toast(m.ok ? T().pdfDone : T().pdfFailed + (m.message || "")); break;
       case "openFailed": toast(T().openFailed + m.message); break;
       case "toolNoWinget": alert(T().toolNoWinget(m.tool)); break;
@@ -166,7 +166,7 @@
   // ---------------------------------------------------------------- helpers
   function show(name) {
     ["home", "running", "results", "error"].forEach(function (n) { $("screen-" + n).hidden = n !== name; });
-    window.scrollTo(0, 0);
+    document.querySelector("main").scrollTop = 0;
   }
   function fileName(p) { return String(p).split(/[\\/]/).pop().replace(/\.json$/i, ""); }
   function parseStamp(name) {
@@ -185,12 +185,20 @@
   function fmtNum(n) { return Number(n).toLocaleString(locale(), { maximumFractionDigits: 1 }); }
 
   var toastTimer = null;
-  function toast(text) {
+  function toast(text, actionLabel, onAction) {
     var el = $("toast");
     el.textContent = text;
+    if (actionLabel) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "toast-action";
+      b.textContent = actionLabel;
+      b.onclick = function () { el.hidden = true; onAction(); };
+      el.appendChild(b);
+    }
     el.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { el.hidden = true; }, 3200);
+    toastTimer = setTimeout(function () { el.hidden = true; }, actionLabel ? 7000 : 3200);
   }
 
   // Glossary: technical words get an explanation on hover or keyboard focus. Input is escaped HTML.
@@ -765,7 +773,7 @@
     $("whatsnew-title").textContent = afterUpdate ? t.whatsNewUpdated(state.version) : t.whatsNewTitle(state.version);
     // When: date of the update on this PC if there was one, else the release date.
     var meta = [];
-    if (state.updatedAt) meta.push(t.updatedOn(longDate(state.updatedAt, true), state.updatedFrom));
+    if (state.updatedAt) { var ud = new Date(state.updatedAt); meta.push(t.updatedOn(ud.toLocaleDateString("fr-FR"), ud.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), state.updatedFrom)); }
     else if (entry && entry.date) meta.push(t.releasedOn(longDate(entry.date + "T12:00:00", false)));
     $("whatsnew-meta").textContent = meta.join(" ");
     $("whatsnew-meta").hidden = !meta.length;
