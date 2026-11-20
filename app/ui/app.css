@@ -193,7 +193,7 @@ button:disabled { opacity: .55; cursor: default; }
 .feedback-close svg { width: 16px; height: 16px; }
 .feedback .link { font-size: .76rem; color: var(--muted); padding: 6px 0 0; font-weight: 400; }
 @keyframes fb-in { from { transform: translateY(150px); opacity: .4; } }
-@media (prefers-reduced-motion: reduce) { .feedback { animation: none; } }
+/* Kept even when Windows reduces animations: a short, gentle slide (user choice). */
 /* symptoms */
 .symptom-label { margin: 26px 0 8px; }
 .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 720px; margin: 0 auto; }
