@@ -1,7 +1,15 @@
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
-  var state = { lang: "fr", theme: "system", textSize: 100, version: "", history: [], current: null, seq: 0 };
+  var state = {
+    lang: "fr", theme: "system", textSize: 100, version: "",
+    history: [],          // [{path, name}] newest first
+    points: [],           // [{name, score}] oldest first
+    current: null,        // {path, data} shown in results
+    symptom: null,        // symptom chosen on the home screen for the next check
+    resultSymptom: null,  // symptom the shown results were run for
+    seq: 0, tech: false
+  };
   var T = function () { return window.I18N[state.lang]; };
 
   // ---------------------------------------------------------------- bridge
@@ -11,16 +19,23 @@
 
   // Preview outside the app (plain browser): fake answers so the UI can be looked at.
   function mock(msg) {
+    var fr = state.lang === "fr";
     var sample = { score: 74, counts: { red: 0, yellow: 3, green: 8 }, areas: [
-      { id: "stability", label: state.lang === "fr" ? "Stabilité" : "Stability", level: "green", findings: [] },
-      { id: "maintenance", label: state.lang === "fr" ? "Entretien" : "Maintenance", level: "yellow", findings: [{ id: "maint.reboot.pending", level: "yellow", text: state.lang === "fr" ? "Redémarrage en attente" : "Restart pending" }] },
-      { id: "storageSpace", label: state.lang === "fr" ? "Espace disque" : "Disk space", level: "yellow", findings: [{ id: "space.system.low", level: "yellow", text: state.lang === "fr" ? "Peu d'espace sur le disque système : 40 Go libres (9 %)" : "Low space on the system disk: 40 GB free (9%)" }] },
-      { id: "battery", label: state.lang === "fr" ? "Batterie" : "Battery", level: "skipped", findings: [] }
-    ] };
+      { id: "stability", label: fr ? "Stabilité" : "Stability", level: "green", findings: [] },
+      { id: "storageSpace", label: fr ? "Espace disque" : "Disk space", level: "yellow", findings: [{ id: "space.system.low", level: "yellow", text: fr ? "Peu d'espace sur le disque système : 40 Go libres (9 %)" : "Low space on the system disk: 40 GB free (9%)" }] },
+      { id: "hardwareErrors", label: fr ? "Matériel" : "Hardware", level: "yellow", findings: [{ id: "whea.some", level: "yellow", text: fr ? "2 erreur(s) matérielle(s) corrigée(s) (WHEA)" : "2 corrected hardware error(s) (WHEA)" }] },
+      { id: "maintenance", label: fr ? "Entretien" : "Maintenance", level: "yellow", findings: [{ id: "maint.reboot.pending", level: "yellow", text: fr ? "Redémarrage en attente" : "Restart pending" }] },
+      { id: "battery", label: fr ? "Batterie" : "Battery", level: "skipped", findings: [] }
+    ], facts: { crashes30d: 0, systemFreePct: 9, systemFreeGB: 40, wheaCorrected: 2 } };
+    var hist = [{ path: "demo2", name: "20261121-101500" }, { path: "demo1", name: "20261114-093000" }];
     setTimeout(function () {
-      if (msg.type === "init") receive({ type: "init", version: "preview", settings: { lang: state.lang, theme: state.theme, textSize: state.textSize }, history: [{ path: "demo", name: "20261121-101500" }] });
-      if (msg.type === "runCheck") setTimeout(function () { receive({ type: "checkDone", path: "demo" }); }, 4000);
+      if (msg.type === "init") receive({ type: "init", version: "preview", settings: { lang: state.lang, theme: state.theme, textSize: state.textSize }, history: hist });
+      if (msg.type === "scores") receive({ type: "scores", points: [{ name: "20261101-120000", score: 46 }, { name: "20261107-120000", score: 58 }, { name: "20261114-093000", score: 66 }, { name: "20261121-101500", score: 74 }] });
+      if (msg.type === "runCheck") setTimeout(function () { receive({ type: "checkDone", path: "demo2" }); }, 3000);
       if (msg.type === "score") receive({ type: "score", id: msg.id, path: msg.path, data: sample });
+      if (msg.type === "compare") receive({ type: "compare", id: msg.id, data: { comparable: true, daysBetween: 7, volumes: [{ drive: "C:", freeGB: 40, deltaFreeGB: 22.4 }], stability: { newUnexpectedShutdowns: 0, newBugchecks: [] }, newGpuEvents: [], newDiskEvents: [], newHardwareErrors: [{ count: 2 }] } });
+      if (msg.type === "copy") receive({ type: "copied", ok: true });
+      if (msg.type === "pdf") receive({ type: "pdf", ok: true });
     }, 150);
   }
 
@@ -31,28 +46,46 @@
         applySettings(m.settings, false);
         state.history = m.history || [];
         renderHome();
+        send({ type: "scores" });
+        break;
+      case "scores":
+        state.points = m.points || [];
+        renderCurve();
         break;
       case "checkDone":
+        state.history = state.history.filter(function (h) { return h.path !== m.path; });
         state.history.unshift({ path: m.path, name: fileName(m.path) });
+        state.resultSymptom = state.symptom;
         requestScore(m.path, "result");
+        send({ type: "scores" });
         break;
       case "score":
         if (m.id === "last") renderLast(m);
-        else if (m.id === "result" + state.seq) { showResults(m); }
+        else if (m.id === "tech") renderTech(m.data);
+        else if (m.id === "result" + state.seq) showResults(m);
         break;
-      case "openFailed":
-        alert(T().openFailed + m.message);
+      case "compare":
+        if (m.id === "since") renderSince(m.data);
+        else if (m.id === "dialog") renderCompareDialog(m.data);
         break;
+      case "compareFailed":
+        if (m.id === "since") $("since-block").hidden = true;
+        else $("cmp-out").textContent = m.message;
+        break;
+      case "copied": toast(m.ok ? T().copied : T().copyFailed); break;
+      case "pdf": endPrint(); toast(m.ok ? T().pdfDone : T().pdfFailed + (m.message || "")); break;
+      case "openFailed": toast(T().openFailed + m.message); break;
       case "error":
         if (m.id === "last") { $("last-card").hidden = true; break; }
+        if (m.id === "tech") { $("tech-out").textContent = m.message; break; }
         showError(m.message);
         break;
     }
   }
 
-  function requestScore(path, kind) {
+  function requestScore(path, kind, full) {
     var id = kind === "result" ? "result" + (++state.seq) : kind;
-    send({ type: "score", path: path, id: id });
+    send({ type: "score", path: path, id: id, full: !!full });
   }
 
   // ---------------------------------------------------------------- settings
@@ -79,36 +112,88 @@
     document.querySelectorAll("[data-i18n-aria]").forEach(function (el) { el.setAttribute("aria-label", t[el.dataset.i18nAria]); el.title = t[el.dataset.i18nAria]; });
     document.querySelectorAll("[data-lang]").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.lang === state.lang); });
     $("version").textContent = state.version ? "v" + state.version : "";
+    renderSymptoms();
   }
 
-  // ---------------------------------------------------------------- screens
+  // ---------------------------------------------------------------- helpers
   function show(name) {
     ["home", "running", "results", "error"].forEach(function (n) { $("screen-" + n).hidden = n !== name; });
     window.scrollTo(0, 0);
   }
-
   function fileName(p) { return String(p).split(/[\\/]/).pop().replace(/\.json$/i, ""); }
-  function parseStamp(name) { // yyyyMMdd-HHmmss
+  function parseStamp(name) {
     var m = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})/.exec(name || "");
     return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) : null;
   }
-  function formatDate(name) {
+  function locale() { return state.lang === "fr" ? "fr-FR" : "en-GB"; }
+  function formatDate(name, short) {
     var d = parseStamp(name);
     if (!d) return name || "";
-    return d.toLocaleDateString(state.lang === "fr" ? "fr-FR" : "en-GB", { day: "numeric", month: "long", year: "numeric" }) +
-      " · " + d.toLocaleTimeString(state.lang === "fr" ? "fr-FR" : "en-GB", { hour: "2-digit", minute: "2-digit" });
+    if (short) return d.toLocaleDateString(locale(), { day: "numeric", month: "short" });
+    return d.toLocaleDateString(locale(), { day: "numeric", month: "long", year: "numeric" }) +
+      " · " + d.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
   }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (ch) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]; }); }
+  function fmtNum(n) { return Number(n).toLocaleString(locale(), { maximumFractionDigits: 1 }); }
+
+  var toastTimer = null;
+  function toast(text) {
+    var el = $("toast");
+    el.textContent = text;
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.hidden = true; }, 3200);
+  }
+
+  // Glossary: technical words get an explanation on hover or keyboard focus. Input is escaped HTML.
+  function gloss(html) {
+    var g = window.GLOSSARY[state.lang];
+    var terms = Object.keys(g).sort(function (a, b) { return b.length - a.length; });
+    var re = new RegExp("(^|[^\\w\\u00C0-\\u017F/-])(" + terms.map(function (t) { return t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }).join("|") + ")(?![\\w\\u00C0-\\u017F])", "g");
+    return html.replace(re, function (all, pre, term) {
+      return pre + '<abbr class="gloss" tabindex="0" data-tip="' + esc(g[term]) + '">' + term + "</abbr>";
+    });
+  }
+
+  // ---------------------------------------------------------------- home
+  var SYMPTOMS = {
+    bsod: ["stability", "hardwareErrors", "diskHealth", "heat"],
+    black: ["graphics", "stability", "heat"],
+    slow: ["performance", "storageSpace", "maintenance", "heat", "diskHealth", "bootTime"],
+    reboot: ["stability", "hardwareErrors", "heat"],
+    games: ["graphics", "stability", "heat", "performance"],
+    disk: ["diskHealth", "storageSpace"],
+    net: ["network"]
+  };
+
+  function renderSymptoms() {
+    var t = T(), box = $("symptoms");
+    if (!box) return;
+    box.innerHTML = Object.keys(SYMPTOMS).map(function (k) {
+      return '<button type="button" class="chip" data-symptom="' + k + '" aria-pressed="' + (state.symptom === k) + '">' + esc(t.symptoms[k]) + "</button>";
+    }).join("");
+  }
+
+  $("symptoms").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-symptom]");
+    if (!b) return;
+    state.symptom = state.symptom === b.dataset.symptom ? null : b.dataset.symptom;
+    renderSymptoms();
+    $("btn-run").textContent = state.symptom ? T().runFor : T().run;
+  });
 
   function renderHome() {
     var has = state.history.length > 0;
     $("first-steps").hidden = has;
     $("last-card").hidden = !has;
+    $("btn-run").textContent = state.symptom ? T().runFor : T().run;
     if (has) {
       $("last-date").textContent = formatDate(state.history[0].name);
       $("last-status").textContent = T().scoring;
       $("last-ring").innerHTML = ringSvg(null, 64);
       requestScore(state.history[0].path, "last");
     }
+    renderCurve();
     show("home");
   }
 
@@ -116,7 +201,31 @@
     var d = m.data;
     $("last-ring").innerHTML = ringSvg(d.score, 64);
     $("last-status").textContent = titleFor(d);
-    $("btn-last").onclick = function () { state.seq++; showResults({ path: m.path, data: d }); };
+    $("btn-last").onclick = function () { state.seq++; state.resultSymptom = null; showResults({ path: m.path, data: d }); };
+  }
+
+  // Score curve of the last checks (needs 2 points or more).
+  function renderCurve() {
+    var pts = state.points.slice(-10), card = $("curve-card");
+    if (pts.length < 2 || !$("screen-home") || state.history.length === 0) { card.hidden = true; return; }
+    card.hidden = false;
+    var w = 560, h = 120, px = 28, py = 18;
+    var x = function (i) { return px + i * (w - 2 * px) / (pts.length - 1); };
+    var y = function (s) { return py + (100 - s) * (h - 2 * py) / 100; };
+    var line = pts.map(function (p, i) { return (i ? "L" : "M") + x(i).toFixed(1) + " " + y(p.score).toFixed(1); }).join(" ");
+    var dots = pts.map(function (p, i) {
+      return '<g><circle class="curve-dot lvl-' + levelOf(p.score) + '" cx="' + x(i).toFixed(1) + '" cy="' + y(p.score).toFixed(1) + '" r="4.5"><title>' +
+        esc(formatDate(p.name, true) + " · " + p.score + "/100") + "</title></circle>" +
+        '<text class="curve-label" x="' + x(i).toFixed(1) + '" y="' + (y(p.score) - 10).toFixed(1) + '">' + p.score + "</text>" +
+        '<text class="curve-date" x="' + x(i).toFixed(1) + '" y="' + (h - 2) + '">' + esc(formatDate(p.name, true)) + "</text></g>";
+    }).join("");
+    var first = pts[0].score, last = pts[pts.length - 1].score, diff = last - first;
+    $("curve-trend").textContent = diff === 0 ? T().trendFlat : (diff > 0 ? "+" : "") + diff + " " + T().trendSince(formatDate(pts[0].name, true));
+    $("curve-trend").className = "curve-trend " + (diff > 0 ? "up" : diff < 0 ? "down" : "");
+    $("curve").innerHTML = '<svg viewBox="0 0 ' + w + " " + h + '" preserveAspectRatio="none" role="img" aria-label="' + esc(T().curveTitle) + '">' +
+      '<line class="curve-grid" x1="' + px + '" x2="' + (w - px) + '" y1="' + y(80) + '" y2="' + y(80) + '"/>' +
+      '<line class="curve-grid" x1="' + px + '" x2="' + (w - px) + '" y1="' + y(50) + '" y2="' + y(50) + '"/>' +
+      '<path class="curve-line" d="' + line + '"/>' + dots + "</svg>";
   }
 
   function titleFor(d) {
@@ -126,7 +235,6 @@
     if (d.score >= 50) return t.titleWatch;
     return t.titleBad;
   }
-
   function levelOf(score) { return score >= 80 ? "green" : score >= 50 ? "yellow" : "red"; }
 
   function ringSvg(score, size) {
@@ -136,10 +244,11 @@
     return '<svg viewBox="0 0 100 100" width="' + size + '" height="' + size + '" role="img" aria-label="' + (score == null ? "" : score + "/100") + '">' +
       '<circle class="ring-bg" cx="50" cy="50" r="' + r + '"/>' +
       '<circle class="ring-fg lvl-' + lvl + '" cx="50" cy="50" r="' + r + '" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + (c * (1 - pct)).toFixed(1) + '" style="--full:' + c.toFixed(1) + '"/>' +
-      '<text x="50" y="' + (size > 80 ? 52 : 50) + '" class="ring-num">' + (score == null ? "…" : score) + '</text>' +
-      (size > 80 ? '<text x="50" y="70" class="ring-max">/100</text>' : "") + '</svg>';
+      '<text x="50" y="' + (size > 80 ? 52 : 50) + '" class="ring-num">' + (score == null ? "…" : score) + "</text>" +
+      (size > 80 ? '<text x="50" y="70" class="ring-max">/100</text>' : "") + "</svg>";
   }
 
+  // ---------------------------------------------------------------- results
   var icons = {
     green: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
     yellow: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v6M12 17h.01"/></svg>',
@@ -148,72 +257,263 @@
   };
   var order = { red: 0, yellow: 1, green: 2, skipped: 3 };
 
-  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (ch) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]; }); }
+  function sortedAreas(d) {
+    var focus = state.resultSymptom ? SYMPTOMS[state.resultSymptom] : [];
+    return (d.areas || []).slice().sort(function (a, b) {
+      var fa = focus.indexOf(a.id) >= 0 ? 0 : 1, fb = focus.indexOf(b.id) >= 0 ? 0 : 1;
+      if (fa !== fb && (a.level !== "green" || b.level !== "green")) {
+        // Symptom areas with a problem come first, then the usual severity order.
+        var pa = fa === 0 && a.level !== "green" && a.level !== "skipped" ? 0 : 1;
+        var pb = fb === 0 && b.level !== "green" && b.level !== "skipped" ? 0 : 1;
+        if (pa !== pb) return pa - pb;
+      }
+      return order[a.level] - order[b.level];
+    });
+  }
 
   function showResults(m) {
     var d = m.data, t = T();
-    state.current = m.path;
+    state.current = { path: m.path, data: d };
+    state.tech = false;
+    $("tech-block").hidden = true;
+    $("btn-tech").setAttribute("aria-pressed", "false");
     $("result-ring").innerHTML = ringSvg(d.score, 132);
     $("result-title").textContent = titleFor(d);
     $("result-summary").textContent = t.summary(d.counts || { red: 0, yellow: 0, green: 0 });
     $("result-date").textContent = t.checkedOn(formatDate(fileName(m.path)));
-    var areas = (d.areas || []).slice().sort(function (a, b) { return order[a.level] - order[b.level]; });
+
+    var sym = state.resultSymptom;
+    $("symptom-banner").hidden = !sym;
+    if (sym) {
+      var hit = (d.areas || []).filter(function (a) { return SYMPTOMS[sym].indexOf(a.id) >= 0 && (a.level === "red" || a.level === "yellow"); });
+      $("symptom-banner").innerHTML = "<strong>" + esc(t.symptomFor(t.symptoms[sym])) + "</strong> " +
+        esc(hit.length ? t.symptomHit(hit.map(function (a) { return a.label; }).join(", ")) : t.symptomNone);
+    }
+
+    var areas = sortedAreas(d);
     $("areas").innerHTML = areas.map(function (a) {
-      var f = (a.findings || []).map(function (x) { return "<li>" + esc(x.text) + "</li>"; }).join("");
-      return '<article class="card area lvl-' + a.level + '">' +
-        '<div class="area-head"><h3>' + esc(a.label) + '</h3>' +
-        '<span class="badge lvl-' + a.level + '">' + icons[a.level] + esc(t.level[a.level]) + '</span></div>' +
+      var f = (a.findings || []).map(function (x) { return "<li>" + gloss(esc(x.text)) + "</li>"; }).join("");
+      var focus = sym && SYMPTOMS[sym].indexOf(a.id) >= 0 ? " focus" : "";
+      return '<article class="card area lvl-' + a.level + focus + '">' +
+        '<div class="area-head"><h3>' + esc(a.label) + "</h3>" +
+        '<span class="badge lvl-' + a.level + '">' + icons[a.level] + esc(t.level[a.level]) + "</span></div>" +
         (f ? "<ul>" + f + "</ul>" : (a.level === "green" ? '<p class="muted">' + esc(t.allGood) + "</p>" : "")) +
         "</article>";
     }).join("");
-    renderAdvice(areas);
+    var adviceIds = renderAdvice(areas);
+    startSince(m.path, adviceIds);
     show("results");
   }
 
-  // Recommendations: one per advice id, most severe finding first, 5 shown then "show more".
+  // ---- recommendations + "C'est fait"
+  function loadDone() { try { return JSON.parse(localStorage.getItem("dd.done") || "{}"); } catch (e) { return {}; } }
+  function saveDone(d) { try { localStorage.setItem("dd.done", JSON.stringify(d)); } catch (e) { } }
+
   function renderAdvice(areas) {
-    var lib = window.ADVICE[state.lang], seen = {}, list = [];
+    var lib = window.ADVICE[state.lang], seen = {}, list = [], t = T();
     var findings = [];
-    areas.forEach(function (a) { (a.findings || []).forEach(function (f) { findings.push(f); }); });
-    findings.sort(function (x, y) { return order[x.level] - order[y.level]; });
-    findings.forEach(function (f) {
-      var id = window.ADVICE_MAP[f.id];
-      if (id && !seen[id] && lib.items[id]) { seen[id] = true; list.push({ id: id, level: f.level, item: lib.items[id] }); }
+    areas.forEach(function (a, ai) { (a.findings || []).forEach(function (f) { findings.push({ f: f, ai: ai }); }); });
+    findings.sort(function (x, y) { return (order[x.f.level] - order[y.f.level]) || (x.ai - y.ai); });
+    findings.forEach(function (o) {
+      var id = window.ADVICE_MAP[o.f.id];
+      if (id && !seen[id] && lib.items[id]) { seen[id] = true; list.push({ id: id, level: o.f.level, item: lib.items[id] }); }
     });
+    var done = loadDone(), curName = fileName(state.current.path);
     $("advice-block").hidden = list.length === 0;
-    var t = T();
     $("advice").innerHTML = list.map(function (x, i) {
       var it = x.item;
+      var mark = done[x.id];
+      var isDone = mark && mark === curName;              // marked on this very check
+      var stillThere = mark && mark < curName;            // marked on an older check, problem still here
       var opens = (it.open || []).map(function (k) {
         return '<button type="button" class="secondary small-btn" data-open="' + esc(k) + '">' + openIcon + esc(lib.open[k] || k) + "</button>";
       }).join("");
-      return '<li class="card advice-item lvl-' + x.level + (i >= 5 ? " extra" : "") + '"' + (i >= 5 ? " hidden" : "") + '>' +
-        "<details><summary><span class=\"advice-n\">" + (i + 1) + "</span><span class=\"advice-title\">" + esc(it.title) + "</span>" +
+      return '<li class="card advice-item lvl-' + x.level + (i >= 5 ? " extra" : "") + (isDone ? " done" : "") + '" data-advice="' + x.id + '"' + (i >= 5 ? " hidden" : "") + ">" +
+        '<details><summary><span class="advice-n">' + (isDone ? icons.green : i + 1) + '</span><span class="advice-title">' + esc(it.title) + "</span>" +
         '<span class="who who-' + it.who + '">' + esc(lib.who[it.who]) + "</span></summary>" +
         '<div class="advice-body">' +
-        "<h4>" + esc(t.whatLabel) + "</h4><p>" + esc(it.what) + "</p>" +
-        "<h4>" + esc(t.whyLabel) + "</h4><p>" + esc(it.why) + "</p>" +
-        "<h4>" + esc(t.howLabel) + "</h4><ol>" + it.how.map(function (s) { return "<li>" + esc(s) + "</li>"; }).join("") + "</ol>" +
-        (opens ? '<div class="open-row">' + opens + "</div>" : "") +
+        (stillThere ? '<p class="still">' + esc(t.stillThere) + "</p>" : "") +
+        "<h4>" + esc(t.whatLabel) + "</h4><p>" + gloss(esc(it.what)) + "</p>" +
+        "<h4>" + esc(t.whyLabel) + "</h4><p>" + gloss(esc(it.why)) + "</p>" +
+        "<h4>" + esc(t.howLabel) + "</h4><ol>" + it.how.map(function (s) { return "<li>" + gloss(esc(s)) + "</li>"; }).join("") + "</ol>" +
+        '<div class="open-row">' + opens +
+        '<button type="button" class="secondary small-btn done-btn" data-done="' + x.id + '" aria-pressed="' + !!isDone + '">' + icons.green + esc(isDone ? t.doneUndo : t.doneMark) + "</button></div>" +
         "</div></details></li>";
     }).join("");
-    var extra = list.length - 5;
-    var more = $("btn-more-advice");
+    var extra = list.length - 5, more = $("btn-more-advice");
     more.hidden = extra <= 0;
     if (extra > 0) {
       more.textContent = t.moreAdvice(extra);
       more.onclick = function () { document.querySelectorAll(".advice-item.extra").forEach(function (el) { el.hidden = false; }); more.hidden = true; };
     }
-    var first = document.querySelector(".advice-item details");
+    var first = document.querySelector(".advice-item:not(.done) details");
     if (first) first.open = true;
+    return list.map(function (x) { return x.id; });
   }
 
   var openIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
 
   document.addEventListener("click", function (e) {
     var b = e.target.closest && e.target.closest("[data-open]");
-    if (b) send({ type: "open", target: b.dataset.open });
+    if (b) { send({ type: "open", target: b.dataset.open }); return; }
+    var d = e.target.closest && e.target.closest("[data-done]");
+    if (d && state.current) {
+      var done = loadDone(), id = d.dataset.done, cur = fileName(state.current.path);
+      if (done[id] === cur) delete done[id]; else done[id] = cur;
+      saveDone(done);
+      var li = d.closest(".advice-item"), isDone = done[id] === cur, t = T();
+      li.classList.toggle("done", isDone);
+      d.setAttribute("aria-pressed", isDone);
+      d.innerHTML = icons.green + esc(isDone ? t.doneUndo : t.doneMark);
+      var n = li.querySelector(".advice-n");
+      n.innerHTML = isDone ? icons.green : String(Array.prototype.indexOf.call(li.parentNode.children, li) + 1);
+      if (isDone) { li.querySelector("details").open = false; toast(t.doneToast); }
+    }
   });
+
+  // ---- since the previous check
+  var sinceCtx = null;
+  function startSince(path, adviceIds) {
+    var idx = state.history.findIndex(function (h) { return h.path === path; });
+    var prev = idx >= 0 ? state.history[idx + 1] : null;
+    var cur = fileName(path);
+    // "C'est fait" verification: advice marked on an older check that no longer shows up is fixed.
+    var done = loadDone(), fixed = [];
+    Object.keys(done).forEach(function (id) {
+      if (done[id] < cur && adviceIds.indexOf(id) < 0) { fixed.push(id); delete done[id]; }
+    });
+    if (fixed.length) saveDone(done);
+    sinceCtx = { fixed: fixed, prevName: prev ? prev.name : null, curName: cur };
+    $("since-block").hidden = !prev && !fixed.length;
+    $("since-list").innerHTML = '<li class="muted">' + esc(T().comparing) + "</li>";
+    if (prev) send({ type: "compare", current: path, previous: prev.path, id: "since" });
+    else renderSince(null);
+  }
+
+  function scoreOf(name) {
+    for (var i = 0; i < state.points.length; i++) if (state.points[i].name === name) return state.points[i].score;
+    return null;
+  }
+
+  function sinceItems(c, prevName, curName) {
+    var t = T(), items = [];
+    var ps = prevName ? scoreOf(prevName) : null, cs = curName ? scoreOf(curName) : null;
+    if (ps != null && cs != null && ps !== cs) items.push({ cls: cs > ps ? "good" : "bad", text: t.scoreDelta(ps, cs) });
+    if (!c || !c.comparable) return items;
+    (c.volumes || []).forEach(function (v) {
+      if (v.deltaFreeGB != null && Math.abs(v.deltaFreeGB) >= 1)
+        items.push({ cls: v.deltaFreeGB > 0 ? "good" : "bad", text: t.spaceDelta(v.drive, (v.deltaFreeGB > 0 ? "+" : "") + fmtNum(v.deltaFreeGB)) });
+    });
+    var st = c.stability || {};
+    var crashes = (st.newUnexpectedShutdowns || 0) + (st.newBugchecks || []).length;
+    if (crashes) items.push({ cls: "bad", text: t.newCrashes(crashes) });
+    var count = function (arr) { return (arr || []).reduce(function (s, g) { return s + (g.count || 1); }, 0); };
+    var groups = [["newGpuEvents", "newGpu"], ["newDiskEvents", "newDisk"], ["newHardwareErrors", "newHw"], ["newCpuThrottleEvents", "newThrottle"], ["newNetworkDrops", "newNet"]];
+    groups.forEach(function (g) { var n = count(c[g[0]]); if (n) items.push({ cls: "bad", text: t[g[1]](n) }); });
+    if (!crashes && !groups.some(function (g) { return count(c[g[0]]); })) items.push({ cls: "good", text: t.nothingNew });
+    return items;
+  }
+
+  function renderSince(c) {
+    var t = T(), lib = window.ADVICE[state.lang];
+    var items = sinceItems(c, sinceCtx.prevName, sinceCtx.curName);
+    sinceCtx.fixed.forEach(function (id) { if (lib.items[id]) items.unshift({ cls: "good", text: t.fixedNow(lib.items[id].title) }); });
+    if (!items.length) { $("since-block").hidden = true; return; }
+    $("since-title").textContent = sinceCtx.prevName ? t.sinceTitle(formatDate(sinceCtx.prevName, true)) : t.sinceTitleNone;
+    $("since-list").innerHTML = items.map(function (i) { return '<li class="' + i.cls + '">' + esc(i.text) + "</li>"; }).join("");
+  }
+
+  // ---- technician view
+  function renderTech(d) {
+    var rows = Object.keys(d.facts || {}).map(function (k) {
+      var v = d.facts[k];
+      return "<tr><td>" + esc(k) + "</td><td>" + esc(v === null ? "—" : typeof v === "object" ? JSON.stringify(v) : v) + "</td></tr>";
+    }).join("");
+    var fired = [];
+    (d.areas || []).forEach(function (a) { (a.findings || []).forEach(function (f) { fired.push(a.id + " / " + f.id + " (" + f.level + ")"); }); });
+    $("tech-out").innerHTML =
+      "<p><strong>" + esc(T().techRules) + "</strong> " + esc(fired.join(" · ") || "—") + "</p>" +
+      "<p><strong>" + esc(T().techSnapshot) + "</strong> <code>" + esc(state.current.path) + "</code> · rules v" + esc(d.rulesVersion) + "</p>" +
+      '<table class="facts"><thead><tr><th>' + esc(T().techFact) + "</th><th>" + esc(T().techValue) + "</th></tr></thead><tbody>" + rows + "</tbody></table>";
+  }
+
+  $("btn-tech").addEventListener("click", function () {
+    state.tech = !state.tech;
+    this.setAttribute("aria-pressed", state.tech);
+    $("tech-block").hidden = !state.tech;
+    if (state.tech) {
+      $("tech-out").textContent = T().scoring;
+      requestScore(state.current.path, "tech", true);
+      $("tech-block").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  });
+
+  // ---- copy for a forum (Markdown, no personal data: the findings carry only counts and sizes)
+  function forumText() {
+    var d = state.current.data, t = T(), lines = [];
+    lines.push("**DesktopDiag** · " + d.score + "/100 · " + formatDate(fileName(state.current.path)));
+    lines.push("");
+    lines.push("| " + t.forumArea + " | " + t.forumStatus + " | " + t.forumFindings + " |");
+    lines.push("|---|---|---|");
+    sortedAreas(d).forEach(function (a) {
+      if (a.level === "skipped") return;
+      lines.push("| " + a.label + " | " + t.level[a.level] + " | " + ((a.findings || []).map(function (f) { return f.text; }).join("; ") || "-") + " |");
+    });
+    var titles = Array.prototype.map.call(document.querySelectorAll(".advice-item .advice-title"), function (el) { return el.textContent; });
+    if (titles.length) { lines.push(""); lines.push("**" + t.todo + "**"); titles.forEach(function (x, i) { lines.push((i + 1) + ". " + x); }); }
+    lines.push("");
+    lines.push("_" + t.forumFooter + "_");
+    return lines.join("\n");
+  }
+  function copyForum() { if (state.current) send({ type: "copy", text: forumText() }); }
+  $("btn-copy").addEventListener("click", copyForum);
+
+  // ---- PDF (WebView2 print to PDF; print CSS shows everything unfolded, light colors)
+  var printState = null;
+  function savePdf() {
+    if (!state.current) return;
+    printState = Array.prototype.map.call(document.querySelectorAll("#screen-results details"), function (el) { var o = el.open; el.open = true; return [el, o]; });
+    document.querySelectorAll(".advice-item.extra").forEach(function (el) { el.hidden = false; });
+    send({ type: "pdf", name: fileName(state.current.path) });
+  }
+  function endPrint() {
+    if (printState) printState.forEach(function (p) { p[0].open = p[1]; });
+    printState = null;
+  }
+  $("btn-pdf").addEventListener("click", savePdf);
+
+  // ---- compare two checks
+  var cmp = $("compare-dlg");
+  $("btn-compare").addEventListener("click", function () {
+    var opts = state.history.map(function (h) {
+      var s = scoreOf(h.name);
+      return '<option value="' + esc(h.path) + '">' + esc(formatDate(h.name) + (s != null ? " · " + s + "/100" : "")) + "</option>";
+    }).join("");
+    $("cmp-a").innerHTML = opts;
+    $("cmp-b").innerHTML = opts;
+    var cur = state.current ? state.current.path : (state.history[0] || {}).path;
+    var idx = state.history.findIndex(function (h) { return h.path === cur; });
+    $("cmp-b").selectedIndex = Math.max(0, idx);
+    $("cmp-a").selectedIndex = Math.min(state.history.length - 1, Math.max(0, idx) + 1);
+    $("cmp-out").innerHTML = "";
+    cmp.showModal();
+  });
+  $("btn-compare-home").addEventListener("click", function () { $("btn-compare").click(); });
+  $("cmp-go").addEventListener("click", function (e) {
+    e.preventDefault();
+    var a = $("cmp-a").value, b = $("cmp-b").value;
+    if (a === b) { $("cmp-out").textContent = T().cmpSame; return; }
+    // Always compare older -> newer.
+    if (fileName(a) > fileName(b)) { var x = a; a = b; b = x; }
+    cmp.dataset.prev = fileName(a); cmp.dataset.cur = fileName(b);
+    $("cmp-out").innerHTML = '<p class="muted">' + esc(T().comparing) + "</p>";
+    send({ type: "compare", current: b, previous: a, id: "dialog" });
+  });
+  function renderCompareDialog(c) {
+    var items = sinceItems(c, cmp.dataset.prev, cmp.dataset.cur);
+    $("cmp-out").innerHTML = '<p class="muted">' + esc(T().cmpBetween(formatDate(cmp.dataset.prev, true), formatDate(cmp.dataset.cur, true))) + "</p>" +
+      '<ul class="since">' + items.map(function (i) { return '<li class="' + i.cls + '">' + esc(i.text) + "</li>"; }).join("") + "</ul>";
+  }
 
   function showError(msg) { $("error-detail").textContent = msg || ""; show("error"); }
 
@@ -227,7 +527,6 @@
     clearInterval(timer);
     timer = setInterval(function () {
       var s = (Date.now() - start) / 1000;
-      // Eases towards 95 % over about a minute; the real end jumps to the results.
       $("progress-bar").style.width = Math.min(95, 100 * (1 - Math.exp(-s / 22))).toFixed(1) + "%";
       if (Math.floor(s / 4) > i && i < T().msgs.length - 1) { i++; $("running-msg").textContent = T().msgs[i]; }
       if ($("screen-running").hidden) clearInterval(timer);
@@ -245,7 +544,7 @@
       if (state.lang === b.dataset.lang) return;
       state.lang = b.dataset.lang;
       applySettings(null, true);
-      if (!$("screen-results").hidden && state.current) requestScore(state.current, "result");
+      if (!$("screen-results").hidden && state.current) requestScore(state.current.path, "result");
       else if (!$("screen-home").hidden) renderHome();
     });
   });
@@ -262,10 +561,15 @@
     applySettings(null, true);
   });
 
+  // Shortcuts: Enter = run (home), Ctrl+C = copy for a forum (results, nothing selected),
+  // Ctrl+P = PDF (results), Escape = home.
   document.addEventListener("keydown", function (e) {
-    if (dlg.open) return;
-    if (e.key === "Enter" && !$("screen-home").hidden && document.activeElement === document.body) startCheck();
-    if (e.key === "Escape" && ($("screen-results").hidden === false || $("screen-error").hidden === false)) renderHome();
+    if (dlg.open || cmp.open) return;
+    var onResults = !$("screen-results").hidden;
+    if (e.key === "Enter" && !$("screen-home").hidden && document.activeElement === document.body) { startCheck(); return; }
+    if (e.ctrlKey && (e.key === "c" || e.key === "C") && onResults && !String(window.getSelection())) { e.preventDefault(); copyForum(); return; }
+    if (e.ctrlKey && (e.key === "p" || e.key === "P")) { e.preventDefault(); if (onResults) savePdf(); return; }
+    if (e.key === "Escape" && (onResults || !$("screen-error").hidden)) renderHome();
   });
 
   translate();

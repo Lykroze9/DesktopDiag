@@ -126,9 +126,16 @@ namespace DesktopDiag
         public static string Run(string script, string args)
         {
             string path = Path.Combine(ScriptsDir, script);
-            string cmd = "[Console]::OutputEncoding=[Text.Encoding]::UTF8; & " + Q(path) + (string.IsNullOrEmpty(args) ? "" : " " + args);
+            return RunCommand("& " + Q(path) + (string.IsNullOrEmpty(args) ? "" : " " + args));
+        }
+
+        // Runs a PowerShell command (built only from fixed text and Q()-quoted paths).
+        // Passed with -EncodedCommand so quotes and $ need no escaping for the command line.
+        public static string RunCommand(string command)
+        {
+            string cmd = "$ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=[Text.Encoding]::UTF8; " + command;
             ProcessStartInfo psi = new ProcessStartInfo("powershell.exe",
-                "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"" + cmd + "\"");
+                "-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand " + Convert.ToBase64String(Encoding.Unicode.GetBytes(cmd)));
             psi.UseShellExecute = false;
             psi.CreateNoWindow = true;
             psi.RedirectStandardOutput = true;
@@ -145,7 +152,7 @@ namespace DesktopDiag
                 string output = p.StandardOutput.ReadToEnd();
                 p.WaitForExit();
                 if (p.ExitCode != 0 && output.Trim().Length == 0)
-                    throw new Exception(script + " failed (" + p.ExitCode + "): " + err.ToString().Trim());
+                    throw new Exception("PowerShell failed (" + p.ExitCode + "): " + err.ToString().Trim());
                 return output;
             }
         }
@@ -298,9 +305,126 @@ namespace DesktopDiag
                 case "init": SendInit(); break;
                 case "saveSettings": SaveSettings(m); break;
                 case "runCheck": RunCheck(); break;
-                case "score": Score(Get(m, "path"), Get(m, "id")); break;
+                case "score": Score(Get(m, "path"), Get(m, "id"), Get(m, "full") == "True"); break;
                 case "open": OpenTarget(Get(m, "target")); break;
+                case "scores": Scores(); break;
+                case "compare": Compare(Get(m, "current"), Get(m, "previous"), Get(m, "id")); break;
+                case "copy": CopyText(Get(m, "text")); break;
+                case "pdf": SavePdf(Get(m, "name")); break;
             }
+        }
+
+        // ---------------------------------------------------------- score history (cached)
+        // Scores of every history snapshot for the curve. Cached per app version in app-scores.json.
+        void Scores()
+        {
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                try
+                {
+                    string cacheFile = Path.Combine(Program.DataRoot, "app-scores.json");
+                    Dictionary<string, object> cache = null;
+                    try { if (File.Exists(cacheFile)) cache = json.Deserialize<Dictionary<string, object>>(File.ReadAllText(cacheFile, Encoding.UTF8)); }
+                    catch { }
+                    if (cache == null || Convert.ToString(cache.ContainsKey("version") ? cache["version"] : null) != Program.Version)
+                    {
+                        cache = new Dictionary<string, object>();
+                        cache["version"] = Program.Version;
+                    }
+                    List<string> missing = new List<string>();
+                    List<string> hist = Ps.History();
+                    foreach (string f in hist) if (!cache.ContainsKey(Path.GetFileName(f))) missing.Add(f);
+                    if (missing.Count > 0)
+                    {
+                        // One PowerShell process for all missing snapshots: one JSON line each.
+                        StringBuilder list = new StringBuilder();
+                        foreach (string f in missing) { if (list.Length > 0) list.Append(","); list.Append(Ps.Arg(f)); }
+                        string script = Path.Combine(Ps.ScriptsDir, "score.ps1");
+                        string output = Ps.RunCommand("foreach ($p in @(" + list + ")) { try { $j = & " + Ps.Arg(script) +
+                            " -Path $p | Out-String; '{0}|{1}' -f (Split-Path $p -Leaf), ($j | ConvertFrom-Json).score } catch { } }");
+                        foreach (string line in output.Split('\n'))
+                        {
+                            string[] parts = line.Trim().Split('|');
+                            int sc;
+                            if (parts.Length == 2 && int.TryParse(parts[1], out sc)) cache[parts[0]] = sc;
+                        }
+                        try { File.WriteAllText(cacheFile, json.Serialize(cache), new UTF8Encoding(false)); } catch { }
+                    }
+                    List<Dictionary<string, object>> points = new List<Dictionary<string, object>>();
+                    for (int i = hist.Count - 1; i >= 0; i--)
+                    {
+                        string n = Path.GetFileName(hist[i]);
+                        if (!cache.ContainsKey(n)) continue;
+                        Dictionary<string, object> p = new Dictionary<string, object>();
+                        p["name"] = Path.GetFileNameWithoutExtension(n);
+                        p["score"] = cache[n];
+                        points.Add(p);
+                    }
+                    Dictionary<string, object> d = Msg("scores");
+                    d["points"] = points;
+                    Send(d);
+                }
+                catch { }
+            });
+        }
+
+        void Compare(string current, string previous, string id)
+        {
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                try
+                {
+                    if (!Ps.IsHistoryFile(current) || !Ps.IsHistoryFile(previous)) throw new Exception("Unknown snapshot.");
+                    string raw = Ps.Run("compare.ps1", "-Current " + Ps.Arg(current) + " -Previous " + Ps.Arg(previous)).Trim();
+                    int start = raw.IndexOf('{');
+                    if (start < 0) throw new Exception("compare.ps1: no result.");
+                    raw = raw.Substring(start);
+                    json.DeserializeObject(raw);
+                    SendRaw("{\"type\":\"compare\",\"id\":" + json.Serialize(id) + ",\"data\":" + raw + "}");
+                }
+                catch (Exception ex)
+                {
+                    Dictionary<string, object> d = Msg("compareFailed");
+                    d["id"] = id;
+                    d["message"] = ex.Message;
+                    Send(d);
+                }
+            });
+        }
+
+        void CopyText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+            bool ok = true;
+            try { Clipboard.SetText(text); } catch { ok = false; }
+            Dictionary<string, object> d = Msg("copied");
+            d["ok"] = ok;
+            Send(d);
+        }
+
+        // PDF of the current page (print CSS applies), saved in %LOCALAPPDATA%\DesktopDiag\reports.
+        async void SavePdf(string name)
+        {
+            Dictionary<string, object> d = Msg("pdf");
+            try
+            {
+                string safe = string.IsNullOrEmpty(name) ? DateTime.Now.ToString("yyyyMMdd-HHmmss") : name;
+                foreach (char c in Path.GetInvalidFileNameChars()) safe = safe.Replace(c, '_');
+                string dir = Path.Combine(Program.DataRoot, "reports");
+                Directory.CreateDirectory(dir);
+                string path = Path.Combine(dir, "DesktopDiag-" + safe + ".pdf");
+                bool ok = await web.CoreWebView2.PrintToPdfAsync(path, null);
+                if (!ok) throw new Exception("PrintToPdf failed");
+                d["ok"] = true;
+                d["path"] = path;
+                Process.Start(path);
+            }
+            catch (Exception ex)
+            {
+                d["ok"] = false;
+                d["message"] = ex.Message;
+            }
+            Send(d);
         }
 
         // "Ouvrir pour moi": fixed list of Windows screens. They only open; nothing is changed.
@@ -412,7 +536,7 @@ namespace DesktopDiag
         }
 
         // Scores a history snapshot with the skill's score.ps1 (rules.json) in the UI language.
-        void Score(string path, string id)
+        void Score(string path, string id, bool full)
         {
             string lang = settings.lang;
             ThreadPool.QueueUserWorkItem(delegate
@@ -420,7 +544,7 @@ namespace DesktopDiag
                 try
                 {
                     if (path == null || !Ps.IsHistoryFile(path)) throw new Exception("Unknown snapshot.");
-                    string raw = Ps.Run("score.ps1", "-Path " + Ps.Arg(path) + " -Lang " + lang).Trim();
+                    string raw = Ps.Run("score.ps1", "-Path " + Ps.Arg(path) + " -Lang " + lang + (full ? " -Full" : "")).Trim();
                     int start = raw.IndexOf('{');
                     if (start < 0) throw new Exception("score.ps1: no result.\n" + raw);
                     raw = raw.Substring(start);
